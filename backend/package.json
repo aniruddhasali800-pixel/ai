@@ -6,7 +6,7 @@
   "description": "Sizzle — multi-tenant restaurant operations API (Express + TypeScript + MongoDB + Socket.IO)",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsup src/server.ts --format esm --target node20 --out-dir dist --clean",
+    "build": "tsup src/server.ts --format esm --target node20 --out-dir dist --clean --external mongodb-memory-server",
     "start": "node dist/server.js",
     "seed": "tsx src/seed.ts",
     "seed:fresh": "tsx src/seed.ts --fresh",
