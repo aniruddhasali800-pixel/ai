@@ -2,7 +2,8 @@ node_modules/
 dist/
 .env
 .data/
-uploads/
+# Only the write-target for uploaded images — the uploads module under src/ is code.
+/backend/uploads/
 *.log
 .DS_Store
 
