@@ -178,8 +178,20 @@ The free tier sleeps after inactivity, so the first request after a quiet period
 `/api/health` warms it. Uploaded menu images go to `backend/uploads` on that container's disk, so
 they disappear on redeploy — object storage is the fix for a real install.
 
-Somewhere other than Render? Serve `frontend/dist` from any static host and put that host in
-`CORS_ORIGIN` and `PUBLIC_BASE_URL`; the socket handshake checks the same comma-separated list.
+**Two hosts — client on Vercel, API on Render.** This repo's live demo does exactly that:
+`https://ai-ecru-kappa-14.vercel.app` for the client, `https://ai-1-hsus.onrender.com` for the API.
+The client is told where the API lives at build time through `VITE_API_URL`, which
+`frontend/.env.production` commits for this pair (a host-level variable overrides it), and the API's
+allowlist always includes that client origin in addition to `CORS_ORIGIN` — so neither half has to be
+remembered in a dashboard. Deep links (`/app`, `/t/<token>`) need `frontend/vercel.json`, whose single
+rewrite sends every path to `index.html`; without it a refresh or a QR code opens a 404 instead of the
+app. Uploaded images are served by the API, so the client routes every `/uploads/...` path through
+`mediaUrl()` rather than trusting a root-relative `src`.
+
+If you change the client's domain, update `VITE_API_URL` on the client side and add the new origin to
+`CORS_ORIGIN` on the API. Anywhere other than Render: serve `frontend/dist` from any static host, put
+that host in both `CORS_ORIGIN` and `PUBLIC_BASE_URL`, and set `VITE_API_URL` to the API's origin — the
+socket handshake checks the same comma-separated list as the HTTP routes.
 
 ## What is deliberately mocked
 

@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import { env } from '../config/env';
+import { env, allowedOrigins } from '../config/env';
 import { TableSessionModel } from '../models';
 import type { AccessPayload } from '../middleware/auth';
 
@@ -23,7 +23,7 @@ export function getIO(): Server {
 
 export function initSocket(server: HttpServer): Server {
   io = new Server(server, {
-    cors: { origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()), credentials: true },
+    cors: { origin: allowedOrigins, credentials: true },
     path: '/socket.io',
   });
 

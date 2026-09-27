@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 import { useEffect, useRef, useState } from 'react';
+import { API_ROOT } from './api';
 
 let socket: Socket | null = null;
 let authToken: string | null = null;
@@ -11,7 +12,7 @@ export function connectRealtime(token: string | null) {
     socket.disconnect();
     socket = null;
   }
-  socket = io({
+  socket = io(API_ROOT || undefined, {
     path: '/socket.io',
     auth: token ? { token } : {},
     transports: ['websocket', 'polling'],

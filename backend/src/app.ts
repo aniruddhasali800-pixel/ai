@@ -5,7 +5,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { env } from './config/env';
+import { env, allowedOrigins } from './config/env';
 import { apiRouter } from './routes';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { paymentWebhookRouter } from './modules/payments/webhook.routes';
@@ -38,7 +38,7 @@ export function createApp() {
       contentSecurityPolicy: false,
     }),
   );
-  app.use(cors({ origin: env.CORS_ORIGIN.split(',').map((o) => o.trim()), credentials: true }));
+  app.use(cors({ origin: allowedOrigins, credentials: true }));
 
   if (!env.isTest) {
     app.use(morgan(env.isProd ? 'combined' : 'dev'));

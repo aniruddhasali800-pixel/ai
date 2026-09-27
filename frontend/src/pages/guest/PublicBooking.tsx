@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { CalendarCheck, Check, Clock, MapPin, Users } from 'lucide-react';
-import { http, errMsg } from '../../lib/api';
+import { http, errMsg, mediaUrl } from '../../lib/api';
 import { Button, Field, Input, Select, Spinner } from '../../components/ui';
 import { toast } from '../../store/toasts';
 import { useTitle } from '../../hooks/useTitle';
@@ -153,7 +153,7 @@ export function PublicBooking() {
     <div className="min-h-screen bg-ink-50 pb-12">
       <header
         className="bg-ink-900 px-5 pb-12 pt-7 text-white"
-        style={restaurant.branding?.coverUrl ? { backgroundImage: `linear-gradient(rgba(28,25,23,.82),rgba(28,25,23,.92)),url(${restaurant.branding.coverUrl})`, backgroundSize: 'cover' } : undefined}
+        style={restaurant.branding?.coverUrl ? { backgroundImage: `linear-gradient(rgba(28,25,23,.82),rgba(28,25,23,.92)),url(${mediaUrl(restaurant.branding.coverUrl)})`, backgroundSize: 'cover' } : undefined}
       >
         <p className="font-display text-[12px] font-800 uppercase tracking-[0.2em] text-ember-400">{restaurant.name}</p>
         <h1 className="mt-1.5 font-display text-[26px] font-800 leading-tight tracking-tight">

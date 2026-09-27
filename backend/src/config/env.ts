@@ -10,6 +10,32 @@ const hosted =
 
 const localDev = 'http://localhost:5173';
 
+/**
+ * The demo client is deployed on its own host, so the API has to be able to read that
+ * origin. A dashboard variable nobody remembers to update is the usual way a deployment
+ * silently loses realtime, so these are always allowed, not only the default.
+ */
+const demoClients = ['https://ai-ecru-kappa-14.vercel.app'];
+
+const builtInOrigins = [hosted, ...demoClients, localDev].filter(Boolean) as string[];
+
+/** A laptop address can never be opened from a customer's phone. */
+function isPrivateAddress(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return (
+      host === 'localhost' ||
+      host === '0.0.0.0' ||
+      host.startsWith('127.') ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+    );
+  } catch {
+    return true;
+  }
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -18,7 +44,7 @@ const schema = z.object({
   REFRESH_TOKEN_SECRET: z.string().min(16).default('dev-refresh-secret-0000000000'),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(7),
-  CORS_ORIGIN: z.string().default([hosted, localDev].filter(Boolean).join(',')),
+  CORS_ORIGIN: z.string().default(builtInOrigins.join(',')),
   PUBLIC_BASE_URL: z.string().default(hosted ?? localDev),
   PAYMENT_WEBHOOK_SECRET: z.string().default('dev-webhook-secret'),
   SWIGGY_WEBHOOK_SECRET: z.string().default('dev-swiggy-secret'),
@@ -71,3 +97,27 @@ export const env = {
   isProd: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
 };
+
+/**
+ * Origins allowed on the HTTP and socket handshakes: whatever the host lists plus this
+ * app's own addresses. A deployed service is never a cross-origin risk against its own
+ * browser, and a stale CORS_ORIGIN must not be able to lock the known clients out.
+ */
+export const allowedOrigins = [
+  ...new Set([...builtInOrigins, ...env.CORS_ORIGIN.split(',').map((o) => o.trim())].filter(Boolean) as string[]),
+];
+
+if (env.isProd && hosted && isPrivateAddress(env.PUBLIC_BASE_URL)) {
+  console.warn(
+    `[config] PUBLIC_BASE_URL is ${env.PUBLIC_BASE_URL}, which no browser outside this machine can open. ` +
+      `Using ${hosted} for table QR codes, guest bills and booking links instead — clear the variable, ` +
+      'or set it to the address your customers reach.',
+  );
+  env.PUBLIC_BASE_URL = hosted;
+} else if (hosted && env.PUBLIC_BASE_URL !== hosted && !allowedOrigins.includes(env.PUBLIC_BASE_URL)) {
+  console.warn(
+    `[config] PUBLIC_BASE_URL is ${env.PUBLIC_BASE_URL} while this host serves ${hosted}. ` +
+      'Table QR codes, guest bills and booking links will point at the first address — set it to ' +
+      'the host your customers can actually reach, or clear the variable to use this one.',
+  );
+}

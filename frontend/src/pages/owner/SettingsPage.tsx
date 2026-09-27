@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Clock, ImageUp, Loader2, MapPin, Save, ShieldCheck } from 'lucide-react';
-import { http, errMsg } from '../../lib/api';
+import { http, errMsg, mediaUrl } from '../../lib/api';
 import { useAuth } from '../../store/auth';
 import type { Restaurant } from '../../lib/types';
 import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from '../../components/ui';
@@ -226,7 +226,7 @@ function ImageField({ label, value, onChange }: { label: string; value: string; 
     <Field label={label}>
       <div className="flex items-center gap-3">
         <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-ink-100 text-ink-400">
-          {value ? <img src={value} alt="" className="h-full w-full object-cover" /> : <ImageUp size={17} />}
+          {value ? <img src={mediaUrl(value)} alt="" className="h-full w-full object-cover" /> : <ImageUp size={17} />}
         </span>
         <div className="min-w-0 flex-1 space-y-1.5">
           <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="/uploads/… or https://" className="text-[12.5px]" />

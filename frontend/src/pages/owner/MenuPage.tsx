@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ImagePlus, Plus, Trash2, Pencil, Star } from 'lucide-react';
 import { useQuery, invalidate, patch } from '../../lib/query';
-import { http, errMsg } from '../../lib/api';
+import { http, errMsg, mediaUrl } from '../../lib/api';
 import type { Addon, Category, MenuBundle, Product, Station } from '../../lib/types';
 import { Button, Card, EmptyState, Field, Input, Modal, Pill, Select, Textarea, Toggle, VegDot } from '../../components/ui';
 import { inr } from '../../lib/format';
@@ -177,7 +177,7 @@ function Chip({ children, active, onClick }: { children: React.ReactNode; active
 
 function Thumb({ url, veg }: { url: string; veg: boolean }) {
   if (!url) return <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-lg ${veg ? 'bg-leaf-100 text-leaf-600' : 'bg-red-50 text-red-600'}`}><ImagePlus size={18} /></div>;
-  return <img src={url} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-ink-200" />;
+  return <img src={mediaUrl(url)} alt="" className="h-12 w-12 shrink-0 rounded-lg object-cover ring-1 ring-ink-200" />;
 }
 
 function ProductModal({ product, categories, addons, onClose }: { product: Product | 'new'; categories: Category[]; addons: Addon[]; onClose: () => void }) {

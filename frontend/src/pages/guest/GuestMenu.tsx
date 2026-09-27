@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Clock, Minus, Plus, ShoppingBag, Store, UtensilsCrossed } from 'lucide-react';
 import { useQuery } from '../../lib/query';
-import { http, errMsg } from '../../lib/api';
+import { http, errMsg, mediaUrl } from '../../lib/api';
 import type { GuestMenu as GuestMenuData } from '../../lib/types';
 import { inr } from '../../lib/format';
 import { Button, Spinner, VegDot } from '../../components/ui';
@@ -144,7 +144,7 @@ export function GuestMenu() {
               <li key={p._id} className="px-4 py-3.5">
                 <div className="flex items-start gap-3">
                   {p.imageUrl ? (
-                    <img src={p.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
+                    <img src={mediaUrl(p.imageUrl)} alt="" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
                   ) : (
                     <span className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-ink-100 text-ink-300">
                       <UtensilsCrossed size={19} />

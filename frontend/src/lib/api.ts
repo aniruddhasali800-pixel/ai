@@ -1,7 +1,21 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { useAuth } from '../store/auth';
 
-const baseURL = '/api';
+/**
+ * Where the API lives. Empty means "this same server", which is how the app runs in
+ * development (Vite proxies /api) and when the API hosts the built client itself.
+ * A separately deployed client — Vercel in front of Render, say — has to be told at
+ * build time, because the browser cannot discover it.
+ */
+export const API_ROOT = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/+$/, '') ?? '';
+
+const baseURL = `${API_ROOT}/api`;
+
+/** Turn a stored `/uploads/menu/x.png` into something loadable from another origin. */
+export function mediaUrl(path: string | null | undefined): string {
+  if (!path) return '';
+  return /^(https?:|data:|blob:)/.test(path) ? path : `${API_ROOT}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 export const http: AxiosInstance = axios.create({
   baseURL,
