@@ -1,6 +1,8 @@
 # Render Blueprint — one web service hosts the API and the built React app.
-# Create the MongoDB Atlas free cluster first and paste its URI into MONGODB_URI
-# when the blueprint provisions (that key is intentionally not stored here).
+# Blueprints cannot interpolate a service's own URL, so the three keys marked
+# `sync: false` are prompts at create time: the Atlas connection string, and your
+# service URL twice (once as the CORS/socket allowlist, once as the host printed
+# into table QR codes and guest bill links).
 services:
   - type: web
     name: sizzle
@@ -24,8 +26,8 @@ services:
       - key: REFRESH_TOKEN_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: '{sizzle.URL}'
+        sync: false
       - key: PUBLIC_BASE_URL
-        value: '{sizzle.URL}'
+        sync: false
       - key: STATIC_DIR
         value: ../frontend/dist

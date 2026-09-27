@@ -155,12 +155,16 @@ on `/` with an SPA fallback for deep links like `/app/orders`. Because everythin
 
 1. Create a free **MongoDB Atlas** cluster (M0 is enough) and copy its connection string. Render's
    own disks are wiped on every deploy, so the database has to live outside the service.
-2. In Render, **New → Blueprint** and point it at this repository. It picks up `render.yaml`,
-   builds both apps and generates the two token secrets for you; the only field it asks for is
-   `MONGODB_URI`.
-3. Once it is live, open a **Shell** on the service and run `npm run seed` from the backend directory
-   to load the demo restaurant. Table QR codes and guest links then point at the service URL, since
-   `PUBLIC_BASE_URL` is filled from it.
+2. In Render, **New → Blueprint** and point it at this repository. It picks up `render.yaml`, builds
+   both apps and generates the two token secrets. Three fields are asked for because a blueprint
+   cannot reference a service's own URL: `MONGODB_URI`, then `CORS_ORIGIN` and `PUBLIC_BASE_URL`,
+   which both take the service URL Render gives you (`https://sizzle.onrender.com`, no trailing
+   slash). Getting `CORS_ORIGIN` right matters — the socket handshake refuses an origin that is not
+   listed, and `PUBLIC_BASE_URL` is the host baked into table QR codes and guest bill links.
+3. Open a **Shell** on the service and run `npm run seed` from the backend directory to load the
+   demo restaurant.
+
+If you change the service's subdomain later, update both URL variables to match and restart.
 
 Two guards worth knowing about: the process exits at boot if `NODE_ENV=production` and either
 `MONGODB_URI` or one of the token secrets is still a development default, and the embedded MongoDB
