@@ -138,11 +138,37 @@ Everything the backend reads lives in `backend/.env`; see `.env.example` for the
 The important ones:
 
 - `MONGODB_URI` — empty in development to use the embedded database.
+- `STATIC_DIR` — only needed if the built client is not at `../frontend/dist`; when that folder
+  exists the API serves the whole app itself.
 - `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` — change both before deploying anywhere.
 - `PUBLIC_BASE_URL` — the host printed into QR codes and guest bill links.
 - `PAYMENT_WEBHOOK_SECRET`, `SWIGGY_WEBHOOK_SECRET`, `ZOMATO_WEBHOOK_SECRET` — HMAC keys the
   gateway and partners sign with; every webhook body is compared against the signature before it
   is trusted.
+
+## Deploying
+
+`render.yaml` at the repo root is a Render Blueprint, so one web service carries both halves: the
+API builds to `backend/dist`, the client builds to `frontend/dist`, and Express serves that client
+on `/` with an SPA fallback for deep links like `/app/orders`. Because everything shares one origin,
+`/api`, `/uploads` and `/socket.io` need no proxy and no extra CORS hop.
+
+1. Create a free **MongoDB Atlas** cluster (M0 is enough) and copy its connection string. Render's
+   own disks are wiped on every deploy, so the database has to live outside the service.
+2. In Render, **New → Blueprint** and point it at this repository. It picks up `render.yaml`,
+   builds both apps and generates the two token secrets for you; the only field it asks for is
+   `MONGODB_URI`.
+3. Once it is live, open a **Shell** on the service and run `npm run seed` from the backend directory
+   to load the demo restaurant. Table QR codes and guest links then point at the service URL, since
+   `PUBLIC_BASE_URL` is filled from it.
+
+Two guards worth knowing about: the process exits at boot if `NODE_ENV=production` and either
+`MONGODB_URI` or one of the token secrets is still a development default, and the embedded MongoDB
+is never started in production. Render's free tier sleeps the service after inactivity, so the first
+hit after a sleep takes ~30 seconds — a request to `/api/health` warms it.
+
+Deploying somewhere else? Point a static host at `frontend/dist` and set `CORS_ORIGIN` and
+`PUBLIC_BASE_URL` to that host; the API then has to allow that cross-origin socket handshake.
 
 ## What is deliberately mocked
 

@@ -1,0 +1,31 @@
+# Render Blueprint — one web service hosts the API and the built React app.
+# Create the MongoDB Atlas free cluster first and paste its URI into MONGODB_URI
+# when the blueprint provisions (that key is intentionally not stored here).
+services:
+  - type: web
+    name: sizzle
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    # Build the API bundle, then the client it serves from ../frontend/dist.
+    buildCommand: npm install && npm run build && cd ../frontend && npm install && npm run build
+    startCommand: node dist/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: '22'
+      - key: MONGODB_URI
+        sync: false
+      - key: ACCESS_TOKEN_SECRET
+        generateValue: true
+      - key: REFRESH_TOKEN_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: '{sizzle.URL}'
+      - key: PUBLIC_BASE_URL
+        value: '{sizzle.URL}'
+      - key: STATIC_DIR
+        value: ../frontend/dist

@@ -23,12 +23,32 @@ const schema = z.object({
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
   UPLOAD_DIR: z.string().default('uploads'),
+  STATIC_DIR: z.string().trim().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
   console.error('Invalid environment configuration:', parsed.error.flatten().fieldErrors);
   process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === 'production') {
+  const placeholderSecrets = ['dev-access-secret-0000000000', 'dev-refresh-secret-0000000000'];
+  const problems: string[] = [];
+  if (!parsed.data.MONGODB_URI) problems.push('MONGODB_URI is not set');
+  if (placeholderSecrets.includes(parsed.data.ACCESS_TOKEN_SECRET ?? '')) {
+    problems.push('ACCESS_TOKEN_SECRET is still the development default');
+  }
+  if (placeholderSecrets.includes(parsed.data.REFRESH_TOKEN_SECRET ?? '')) {
+    problems.push('REFRESH_TOKEN_SECRET is still the development default');
+  }
+  if (problems.length) {
+    console.error(
+      `Refusing to start in production:\n- ${problems.join('\n- ')}\n` +
+        'Set these on the host (for Render: Dashboard → Environment). Generate secrets with e.g. `openssl rand -hex 32`.',
+    );
+    process.exit(1);
+  }
 }
 
 export const env = {
