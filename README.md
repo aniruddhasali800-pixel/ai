@@ -144,7 +144,9 @@ The important ones:
 - `STATIC_DIR` — only needed if the built client is not at `../frontend/dist`; when that folder
   exists the API serves the whole app itself.
 - `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` — change both before deploying anywhere.
-- `PUBLIC_BASE_URL` — the host printed into QR codes and guest bill links.
+- `PUBLIC_BASE_URL` — the host printed into QR codes and guest bill links. On a deployed
+  instance it is never allowed to be a laptop address, since no customer's phone can open one;
+  the API falls back to the host the platform publishes and says so at boot.
 - `PAYMENT_WEBHOOK_SECRET`, `SWIGGY_WEBHOOK_SECRET`, `ZOMATO_WEBHOOK_SECRET` — HMAC keys the
   gateway and partners sign with; every webhook body is compared against the signature before it
   is trusted.

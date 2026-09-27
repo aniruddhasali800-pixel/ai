@@ -107,7 +107,7 @@ export const allowedOrigins = [
   ...new Set([...builtInOrigins, ...env.CORS_ORIGIN.split(',').map((o) => o.trim())].filter(Boolean) as string[]),
 ];
 
-if (env.isProd && hosted && isPrivateAddress(env.PUBLIC_BASE_URL)) {
+if (hosted && isPrivateAddress(env.PUBLIC_BASE_URL)) {
   console.warn(
     `[config] PUBLIC_BASE_URL is ${env.PUBLIC_BASE_URL}, which no browser outside this machine can open. ` +
       `Using ${hosted} for table QR codes, guest bills and booking links instead — clear the variable, ` +
