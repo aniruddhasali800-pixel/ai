@@ -2,11 +2,18 @@ import http from 'node:http';
 import { createApp } from './app';
 import { env } from './config/env';
 import { connectDb, disconnectDb } from './config/db';
+import { RestaurantModel } from './models';
+import { seedDemoData } from './seed';
 import { initSocket, closeSocket } from './realtime/socket';
 import { startScheduler, stopScheduler } from './services/scheduler.service';
 
 async function main() {
   await connectDb();
+
+  if (env.AUTO_SEED && (await RestaurantModel.estimatedDocumentCount()) === 0) {
+    console.log('[server] empty database — loading the Saffron & Smoke demo tenant');
+    await seedDemoData();
+  }
 
   const app = createApp();
   const server = http.createServer(app);

@@ -1,8 +1,9 @@
 # Render Blueprint — one web service hosts the API and the built React app.
-# Blueprints cannot interpolate a service's own URL, so the three keys marked
-# `sync: false` are prompts at create time: the Atlas connection string, and your
-# service URL twice (once as the CORS/socket allowlist, once as the host printed
-# into table QR codes and guest bill links).
+# `npm run build` in backend/ bundles the server and builds ../frontend/dist, which
+# the API then serves, so the default Node build and start commands are enough.
+# Render publishes the service's own URL through RENDER_EXTERNAL_URL, and the config
+# reads it for the CORS allowlist and for the host baked into QR codes and guest
+# links — so there is nothing to type here except the database connection string.
 services:
   - type: web
     name: sizzle
@@ -10,8 +11,7 @@ services:
     plan: free
     region: oregon
     rootDir: backend
-    # Build the API bundle, then the client it serves from ../frontend/dist.
-    buildCommand: npm install && npm run build && cd ../frontend && npm install && npm run build
+    buildCommand: npm install && npm run build
     startCommand: node dist/server.js
     healthCheckPath: /api/health
     envVars:
@@ -19,15 +19,8 @@ services:
         value: production
       - key: NODE_VERSION
         value: '22'
+      # Atlas (or any reachable MongoDB). Required in production, and required at all
+      # if you want to seed from a Render shell — an in-container database cannot be
+      # reached from the shell's own filesystem.
       - key: MONGODB_URI
         sync: false
-      - key: ACCESS_TOKEN_SECRET
-        generateValue: true
-      - key: REFRESH_TOKEN_SECRET
-        generateValue: true
-      - key: CORS_ORIGIN
-        sync: false
-      - key: PUBLIC_BASE_URL
-        sync: false
-      - key: STATIC_DIR
-        value: ../frontend/dist

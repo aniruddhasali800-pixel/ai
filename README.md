@@ -124,7 +124,8 @@ when the destination is *Takeaway / counter*; delivery orders get them from the 
 ## Scripts
 
 Backend: `npm run dev`, `npm run build`, `npm start`, `npm run seed`, `npm run seed:fresh`,
-`npm run typecheck`, `npm test`.
+`npm run typecheck`, `npm test`. `build` bundles the API and then builds the client, since it serves
+the client; `seed` is idempotent and `seed:fresh` wipes first.
 
 Frontend: `npm run dev`, `npm run build`, `npm run preview`, `npm run typecheck`.
 
@@ -138,6 +139,8 @@ Everything the backend reads lives in `backend/.env`; see `.env.example` for the
 The important ones:
 
 - `MONGODB_URI` — empty in development to use the embedded database.
+- `AUTO_SEED` — set to `false` to boot an untouched database clean instead of loading the demo
+  tenant into it.
 - `STATIC_DIR` — only needed if the built client is not at `../frontend/dist`; when that folder
   exists the API serves the whole app itself.
 - `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` — change both before deploying anywhere.
@@ -148,31 +151,35 @@ The important ones:
 
 ## Deploying
 
-`render.yaml` at the repo root is a Render Blueprint, so one web service carries both halves: the
-API builds to `backend/dist`, the client builds to `frontend/dist`, and Express serves that client
-on `/` with an SPA fallback for deep links like `/app/orders`. Because everything shares one origin,
-`/api`, `/uploads` and `/socket.io` need no proxy and no extra CORS hop.
+One service runs the whole product. `npm run build` in `backend/` bundles the API to `backend/dist`
+and builds the client to `frontend/dist`, which Express then serves on `/` with an SPA fallback for
+deep links like `/app/orders`. Because the browser talks to a single origin, `/api`, `/uploads` and
+`/socket.io` need no proxy, no absolute API base and no CORS allowance.
 
-1. Create a free **MongoDB Atlas** cluster (M0 is enough) and copy its connection string. Render's
-   own disks are wiped on every deploy, so the database has to live outside the service.
-2. In Render, **New → Blueprint** and point it at this repository. It picks up `render.yaml`, builds
-   both apps and generates the two token secrets. Three fields are asked for because a blueprint
-   cannot reference a service's own URL: `MONGODB_URI`, then `CORS_ORIGIN` and `PUBLIC_BASE_URL`,
-   which both take the service URL Render gives you (`https://sizzle.onrender.com`, no trailing
-   slash). Getting `CORS_ORIGIN` right matters — the socket handshake refuses an origin that is not
-   listed, and `PUBLIC_BASE_URL` is the host baked into table QR codes and guest bill links.
-3. Open a **Shell** on the service and run `npm run seed` from the backend directory to load the
-   demo restaurant.
+**Render.** `render.yaml` is a Blueprint (**New → Blueprint**, point it at this repo); on a service
+you created by hand, set root directory `backend`, build `npm install && npm run build`, start
+`node dist/server.js`, health check `/api/health`. The host tells the app its own public URL through
+`RENDER_EXTERNAL_URL`, and the config reads it — so the socket allowlist and every QR code, guest
+bill link and booking link come out pointing at the deployed domain without any variable to fill in.
 
-If you change the service's subdomain later, update both URL variables to match and restart.
+The database is the one real decision:
 
-Two guards worth knowing about: the process exits at boot if `NODE_ENV=production` and either
-`MONGODB_URI` or one of the token secrets is still a development default, and the embedded MongoDB
-is never started in production. Render's free tier sleeps the service after inactivity, so the first
-hit after a sleep takes ~30 seconds — a request to `/api/health` warms it.
+- **Leave it alone** and the service runs an embedded MongoDB inside its own container. Booting an
+  empty database loads the demo tenant automatically (`AUTO_SEED`, see below), so the site is usable
+  the moment it starts — and wipes back to a fresh demo on every deploy. A Render shell cannot reach
+  that database, since the shell is a separate container, so seeding has to happen at boot.
+- **Set `MONGODB_URI`** to a free MongoDB Atlas M0 cluster and the data survives redeploys; then
+  `npm run seed` in a Render shell works too, because both containers use the same database.
+- **Set `NODE_ENV=production`** once you do have Atlas: the process then refuses to boot on a missing
+  `MONGODB_URI` or a development-default token secret, and never starts the embedded database. Pair
+  it with generated secrets (`openssl rand -hex 32`).
 
-Deploying somewhere else? Point a static host at `frontend/dist` and set `CORS_ORIGIN` and
-`PUBLIC_BASE_URL` to that host; the API then has to allow that cross-origin socket handshake.
+The free tier sleeps after inactivity, so the first request after a quiet period takes ~30 seconds;
+`/api/health` warms it. Uploaded menu images go to `backend/uploads` on that container's disk, so
+they disappear on redeploy — object storage is the fix for a real install.
+
+Somewhere other than Render? Serve `frontend/dist` from any static host and put that host in
+`CORS_ORIGIN` and `PUBLIC_BASE_URL`; the socket handshake checks the same comma-separated list.
 
 ## What is deliberately mocked
 

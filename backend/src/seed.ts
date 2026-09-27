@@ -96,10 +96,8 @@ async function stampCreatedAt(
   await model.updateOne({ _id: id }, { $set: { createdAt, ...extra } }, { timestamps: false });
 }
 
-async function main() {
-  const fresh = process.argv.includes('--fresh');
-  await connectDb();
-
+/** Fills the connected database with the demo tenant. Safe to call from the server. */
+export async function seedDemoData(fresh = false): Promise<void> {
   if (fresh) {
     const collections = await Promise.all([
       AddonModel,
@@ -126,7 +124,6 @@ async function main() {
   const already = await RestaurantModel.findOne({ slug: 'saffron-and-smoke' }).lean();
   if (already) {
     console.log('[seed] Saffron & Smoke already exists — nothing to do. Use --fresh to rebuild.');
-    await disconnectDb();
     return;
   }
 
@@ -901,12 +898,19 @@ async function main() {
   Public branding API:
     ${env.PUBLIC_BASE_URL}/api/public/restaurant/saffron-and-smoke
 `);
-
-  await disconnectDb();
 }
 
-main().catch(async (err) => {
-  console.error('[seed] failed', err);
-  await disconnectDb().catch(() => {});
-  process.exit(1);
-});
+/**
+ * Only the CLI owns the connection; the server calls seedDemoData() with one
+ * already open. Matched on argv because tsup folds this module into server.js.
+ */
+if (/seed\.[cm]?[jt]s$/.test(process.argv[1] ?? '')) {
+  connectDb()
+    .then(() => seedDemoData(process.argv.includes('--fresh')))
+    .then(() => disconnectDb())
+    .catch(async (err) => {
+      console.error('[seed] failed', err);
+      await disconnectDb().catch(() => {});
+      process.exit(1);
+    });
+}

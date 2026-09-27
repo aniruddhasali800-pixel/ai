@@ -1,6 +1,15 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+// Render tells a service its own public address through these variables. Reading them
+// means the socket handshake allowlist and every QR/guest link point at the host the
+// browser is actually on, with nothing to remember to set in the dashboard.
+const hosted =
+  process.env.RENDER_EXTERNAL_URL?.replace(/\/+$/, '') ||
+  (process.env.RENDER_EXTERNAL_HOSTNAME ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` : undefined);
+
+const localDev = 'http://localhost:5173';
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -9,8 +18,8 @@ const schema = z.object({
   REFRESH_TOKEN_SECRET: z.string().min(16).default('dev-refresh-secret-0000000000'),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(7),
-  CORS_ORIGIN: z.string().default('http://localhost:5173'),
-  PUBLIC_BASE_URL: z.string().default('http://localhost:5173'),
+  CORS_ORIGIN: z.string().default([hosted, localDev].filter(Boolean).join(',')),
+  PUBLIC_BASE_URL: z.string().default(hosted ?? localDev),
   PAYMENT_WEBHOOK_SECRET: z.string().default('dev-webhook-secret'),
   SWIGGY_WEBHOOK_SECRET: z.string().default('dev-swiggy-secret'),
   ZOMATO_WEBHOOK_SECRET: z.string().default('dev-zomato-secret'),
@@ -24,6 +33,12 @@ const schema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
   UPLOAD_DIR: z.string().default('uploads'),
   STATIC_DIR: z.string().trim().optional(),
+  // A virgin database gets the demo tenant loaded into it, which is the only way a
+  // hosted instance has anything to show. Set AUTO_SEED=false for a clean install.
+  AUTO_SEED: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false'),
 });
 
 const parsed = schema.safeParse(process.env);
