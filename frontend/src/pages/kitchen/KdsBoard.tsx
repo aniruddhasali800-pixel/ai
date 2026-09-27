@@ -1,0 +1,165 @@
+import { useMemo, useState } from 'react';
+import { CheckCircle2, Flame, Microwave, PauseCircle, PlayCircle, Inbox } from 'lucide-react';
+import { useQuery, patch } from '../../lib/query';
+import { http } from '../../lib/api';
+import type { Order, OrderStatus, Paginated, Station } from '../../lib/types';
+import { SOURCE_META, stationLabel } from '../../lib/statusMaps';
+import { minutesSince } from '../../lib/format';
+import { EmptyState, SegmentedControl } from '../../components/ui';
+import { toast } from '../../store/toasts';
+
+const BOARD_COLUMNS: { key: OrderStatus; label: string; accent: string; next?: OrderStatus; nextLabel?: string }[] = [
+  { key: 'PLACED', label: 'New', accent: 'border-t-ember-500', next: 'ACCEPTED', nextLabel: 'Start' },
+  { key: 'ACCEPTED', label: 'Queued', accent: 'border-t-amber-500', next: 'PREPARING', nextLabel: 'Fire' },
+  { key: 'PREPARING', label: 'On the fire', accent: 'border-t-blue-500', next: 'READY', nextLabel: 'Ready' },
+  { key: 'READY', label: 'Ready to pass', accent: 'border-t-leaf-500', next: 'SERVED', nextLabel: 'Hand off' },
+];
+
+const STATIONS: (Station | 'ALL')[] = ['ALL', 'MAIN', 'GRILL', 'TANDOOR', 'FRY', 'BAR', 'DESSERT'];
+
+export function KdsBoard() {
+  const [station, setStation] = useState<Station | 'ALL'>('ALL');
+  const { data } = useQuery<{ data: Order[] }>('kds:orders', '/kitchen/orders');
+
+  const orders = useMemo(() => {
+    const all = data?.data ?? [];
+    if (station === 'ALL') return all;
+    return all.filter((o) => o.items.some((i) => i.station === station));
+  }, [data, station]);
+
+  const move = async (order: Order, next: OrderStatus) => {
+    // optimistic: drop from current column, appear in next instantly
+    patch<{ data: Order[] }>('kds:orders', (cur) =>
+      cur ? { data: cur.data.map((o) => (o._id === order._id ? { ...o, status: next } : o)) } : cur,
+    );
+    try {
+      await http.patch(`/kitchen/orders/${order._id}/status`, { status: next });
+      toast(`${order.orderNumber} → ${next.toLowerCase()}`, 'success');
+    } catch {
+      patch<{ data: Order[] }>('kds:orders', (cur) =>
+        cur ? { data: cur.data.map((o) => (o._id === order._id ? { ...o, status: order.status } : o)) } : cur,
+      );
+      toast('Could not update the ticket', 'error');
+    }
+  };
+
+  const totals = {
+    tickets: orders.length,
+    covers: orders.reduce((s, o) => s + o.items.reduce((n, i) => n + i.qty, 0), 0),
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <SegmentedControl
+          size="sm"
+          value={station}
+          onChange={setStation}
+          options={STATIONS.map((s) => ({ value: s, label: s === 'ALL' ? 'All stations' : stationLabel(s) }))}
+        />
+        <div className="flex items-center gap-4 text-[12px] text-ink-400">
+          <span className="inline-flex items-center gap-1.5"><Inbox size={14} /> {totals.tickets} live tickets</span>
+          <span className="inline-flex items-center gap-1.5"><Flame size={14} /> {totals.covers} items firing</span>
+        </div>
+      </div>
+
+      {!data && <div className="grid place-items-center py-20 text-ink-500">Warming the pass…</div>}
+      {data && orders.length === 0 && (
+        <div className="grid place-items-center rounded-2xl border border-dashed border-white/15 py-20 text-center">
+          <CheckCircle2 size={34} className="mb-2 text-leaf-500" />
+          <p className="font-display text-lg font-700 text-ink-200">Board is clear</p>
+          <p className="text-[13px] text-ink-500">New tickets land here the moment a guest or waiter sends them.</p>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-4">
+        {BOARD_COLUMNS.map((col) => {
+          const list = orders
+            .filter((o) => o.status === col.key)
+            .sort((a, b) => new Date(a.placedAt).getTime() - new Date(b.placedAt).getTime());
+          return (
+            <section key={col.key} className={`rounded-2xl border border-white/10 border-t-4 bg-white/[0.03] ${col.accent}`}>
+              <header className="flex items-center justify-between px-3.5 py-3">
+                <h2 className="font-display text-[14px] font-700 uppercase tracking-wide text-ink-200">{col.label}</h2>
+                <span className="grid h-6 min-w-6 place-items-center rounded-full bg-white/10 px-1.5 text-[12px] font-bold text-white">{list.length}</span>
+              </header>
+              <div className="space-y-3 px-3 pb-3 lg:max-h-[calc(100vh-15rem)] lg:overflow-y-auto">
+                {list.map((o) => (
+                  <Ticket key={o._id} order={o} next={col.next} nextLabel={col.nextLabel} onAdvance={move} activeStation={station} />
+                ))}
+                {!list.length && <p className="px-1 py-6 text-center text-[12px] text-ink-600">Nothing here</p>}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Ticket({
+  order,
+  next,
+  nextLabel,
+  onAdvance,
+  activeStation,
+}: {
+  order: Order;
+  next?: OrderStatus;
+  nextLabel?: string;
+  onAdvance: (order: Order, next: OrderStatus) => void;
+  activeStation: Station | 'ALL';
+}) {
+  const mins = minutesSince(order.placedAt);
+  const late = mins >= 20;
+  const dropoff = [order.customerAddress, order.customerCity].filter(Boolean).join(', ');
+  return (
+    <article className={`animate-in overflow-hidden rounded-xl border bg-ink-900 shadow-lg ${late ? 'border-red-500/50' : 'border-white/10'}`}>
+      <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+        <span className="font-display text-[15px] font-800 text-white">{order.orderNumber}</span>
+        <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ink-300">
+          {SOURCE_META[order.source]?.label}
+        </span>
+        <span className={`ml-auto inline-flex items-center gap-1 text-[12px] font-semibold tabular-nums ${late ? 'text-red-400' : 'text-ink-400'}`}>
+          {late && <Flame size={12} className="pulse" />}
+          {mins}m
+        </span>
+      </header>
+      {!!dropoff && (
+        <div className="border-b border-white/10 bg-ember-500/10 px-3 py-1.5 text-[11.5px] leading-snug">
+          <p className="font-semibold text-ember-200">{dropoff}</p>
+          {order.customerPhone && <p className="text-ink-400">{order.customerName || 'Guest'} · {order.customerPhone}</p>}
+        </div>
+      )}
+      <ul className="divide-y divide-white/5">
+        {order.items.map((it, idx) => (
+          <li
+            key={idx}
+            className={`flex items-start gap-2 px-3 py-2 ${activeStation !== 'ALL' && it.station === activeStation ? 'bg-ember-500/10' : ''}`}
+          >
+            <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded bg-ember-500 text-[11px] font-bold text-white">{it.qty}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold leading-tight text-ink-100">{it.name}</span>
+              {it.addons?.length > 0 && <span className="block text-[11.5px] text-ink-400">+ {it.addons.map((a) => a.name).join(', ')}</span>}
+              {it.notes && <span className="mt-0.5 block rounded bg-amber-500/15 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-300">{it.notes}</span>}
+              {it.station !== 'MAIN' && <span className="mt-0.5 block text-[10.5px] uppercase tracking-wide text-ink-500">{stationLabel(it.station)}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {next && (
+        <button
+          onClick={() => onAdvance(order, next)}
+          className="flex w-full items-center justify-center gap-1.5 bg-ember-500 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-ember-600 active:bg-ember-700"
+        >
+          {nextLabel === 'Ready' ? <PlayCircle size={15} /> : <Microwave size={15} />} {nextLabel}
+        </button>
+      )}
+      {order.status === 'READY' && (
+        <div className="flex items-center justify-center gap-1.5 bg-leaf-600 py-2 text-[12px] font-bold text-white">
+          <PauseCircle size={14} /> Waiting for pickup
+        </div>
+      )}
+    </article>
+  );
+}

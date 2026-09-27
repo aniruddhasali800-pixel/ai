@@ -1,0 +1,64 @@
+import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
+import { useAuth } from '../store/auth';
+
+const baseURL = '/api';
+
+export const http: AxiosInstance = axios.create({
+  baseURL,
+  withCredentials: false,
+});
+
+http.interceptors.request.use((config) => {
+  const token = useAuth.getState().accessToken;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  const { refreshToken, setTokens, logout } = useAuth.getState();
+  if (!refreshToken) {
+    logout();
+    throw new Error('no refresh token');
+  }
+  try {
+    const { data } = await axios.post(`${baseURL}/auth/refresh`, { refreshToken });
+    setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    return data.accessToken as string;
+  } catch (err) {
+    logout();
+    throw err;
+  }
+}
+
+http.interceptors.response.use(
+  (res) => res,
+  async (error: AxiosError) => {
+    const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const status = error.response?.status;
+    const isAuthRoute = original?.url?.includes('/auth/login') || original?.url?.includes('/auth/refresh');
+    if (status === 401 && original && !original._retry && !isAuthRoute) {
+      original._retry = true;
+      try {
+        if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => (refreshPromise = null));
+        const token = await refreshPromise;
+        original.headers.Authorization = `Bearer ${token}`;
+        return http(original);
+      } catch {
+        return Promise.reject(error);
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
+/** Extract a human-readable message from any failed axios call. */
+export function errMsg(error: unknown, fallback = 'Something went wrong'): string {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as { message?: string; error?: { message?: string } } | undefined;
+    return data?.error?.message || data?.message || fallback;
+  }
+  if (error instanceof Error) return error.message;
+  return fallback;
+}

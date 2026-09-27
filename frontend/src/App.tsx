@@ -1,0 +1,88 @@
+import { lazy, Suspense } from 'react';
+import { Route, Routes } from 'react-router-dom';
+import { LoginPage } from './pages/Login';
+import { StaffLayout } from './layouts/StaffLayout';
+import { KdsLayout } from './layouts/KdsLayout';
+import { FloorLayout } from './layouts/FloorLayout';
+import { PosLayout } from './layouts/PosLayout';
+import { Spinner } from './components/ui';
+
+const Hub = lazy(() => import('./pages/Hub').then((m) => ({ default: m.Hub })));
+const RegisterPage = lazy(() => import('./pages/Register').then((m) => ({ default: m.RegisterPage })));
+const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })));
+
+const DashboardPage = lazy(() => import('./pages/owner/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const OrdersPage = lazy(() => import('./pages/owner/OrdersPage').then((m) => ({ default: m.OrdersPage })));
+const OrderDetailPage = lazy(() => import('./pages/owner/OrderDetailPage').then((m) => ({ default: m.OrderDetailPage })));
+const TablesPage = lazy(() => import('./pages/owner/TablesPage').then((m) => ({ default: m.TablesPage })));
+const MenuPage = lazy(() => import('./pages/owner/MenuPage').then((m) => ({ default: m.MenuPage })));
+const BookingsPage = lazy(() => import('./pages/owner/BookingsPage').then((m) => ({ default: m.BookingsPage })));
+const InventoryPage = lazy(() => import('./pages/owner/InventoryPage').then((m) => ({ default: m.InventoryPage })));
+const StaffPage = lazy(() => import('./pages/owner/StaffPage').then((m) => ({ default: m.StaffPage })));
+const ReportsPage = lazy(() => import('./pages/owner/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const DeliveryPage = lazy(() => import('./pages/owner/DeliveryPage').then((m) => ({ default: m.DeliveryPage })));
+const AuditPage = lazy(() => import('./pages/owner/AuditPage').then((m) => ({ default: m.AuditPage })));
+const SettingsPage = lazy(() => import('./pages/owner/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+
+const KdsBoard = lazy(() => import('./pages/kitchen/KdsBoard').then((m) => ({ default: m.KdsBoard })));
+const FloorMap = lazy(() => import('./pages/waiter/FloorMap').then((m) => ({ default: m.FloorMap })));
+const NewOrder = lazy(() => import('./pages/waiter/NewOrder').then((m) => ({ default: m.NewOrder })));
+const WaiterFloor = lazy(() => import('./pages/waiter/WaiterFloor').then((m) => ({ default: m.WaiterFloor })));
+const BillsPage = lazy(() => import('./pages/pos/BillsPage').then((m) => ({ default: m.BillsPage })));
+const PosRequests = lazy(() => import('./pages/pos/PosRequests').then((m) => ({ default: m.PosRequests })));
+
+const GuestMenu = lazy(() => import('./pages/guest/GuestMenu').then((m) => ({ default: m.GuestMenu })));
+const GuestSession = lazy(() => import('./pages/guest/GuestSession').then((m) => ({ default: m.GuestSession })));
+const GuestBill = lazy(() => import('./pages/guest/GuestBill').then((m) => ({ default: m.GuestBill })));
+const PublicBooking = lazy(() => import('./pages/guest/PublicBooking').then((m) => ({ default: m.PublicBooking })));
+
+export function App() {
+  return (
+    <Suspense fallback={<div className="grid min-h-screen place-items-center bg-ink-50"><Spinner label="Loading…" /></div>}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* Back office — owner & manager */}
+        <Route path="/app" element={<StaffLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="orders" element={<OrdersPage />} />
+          <Route path="orders/:id" element={<OrderDetailPage />} />
+          <Route path="tables" element={<TablesPage />} />
+          <Route path="menu" element={<MenuPage />} />
+          <Route path="bookings" element={<BookingsPage />} />
+          <Route path="inventory" element={<InventoryPage />} />
+          <Route path="staff" element={<StaffPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="delivery" element={<DeliveryPage />} />
+          <Route path="audit" element={<AuditPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+        </Route>
+
+        {/* Role-specific workspaces */}
+        <Route path="/kds" element={<KdsLayout />}>
+          <Route index element={<KdsBoard />} />
+        </Route>
+        <Route path="/floor" element={<FloorLayout />}>
+          <Route index element={<WaiterFloor />} />
+          <Route path="map" element={<FloorMap />} />
+          <Route path="order" element={<NewOrder />} />
+          <Route path="bookings" element={<BookingsPage />} />
+        </Route>
+        <Route path="/pos" element={<PosLayout />}>
+          <Route index element={<BillsPage />} />
+          <Route path="requests" element={<PosRequests />} />
+        </Route>
+
+        {/* Guest flows — no auth */}
+        <Route path="/t/:tableToken" element={<GuestMenu />} />
+        <Route path="/s/:publicToken" element={<GuestSession />} />
+        <Route path="/bill/:billToken" element={<GuestBill />} />
+        <Route path="/book/:slug" element={<PublicBooking />} />
+
+        <Route path="/" element={<Hub />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
+  );
+}

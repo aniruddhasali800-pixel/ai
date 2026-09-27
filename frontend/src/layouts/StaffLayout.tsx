@@ -1,0 +1,53 @@
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import {
+  BarChart3,
+  CalendarClock,
+  ClipboardList,
+  LayoutGrid,
+  Link2,
+  ScrollText,
+  Settings,
+  ShoppingBasket,
+  ShieldCheck,
+  Sparkles,
+  UtensilsCrossed,
+  Users,
+} from 'lucide-react';
+import { AppShell, type NavItem } from './AppShell';
+import { useAuth } from '../store/auth';
+import { useRealtimeShell } from '../hooks/useRealtimeShell';
+import { can } from '../store/auth';
+
+const NAV: (NavItem & { permission: string })[] = [
+  { to: '/app', label: 'Dashboard', icon: <LayoutGrid size={17} />, permission: 'reports:read', end: true },
+  { to: '/app/orders', label: 'Orders', icon: <ClipboardList size={17} />, permission: 'orders:read' },
+  { to: '/app/tables', label: 'Tables & QR', icon: <Sparkles size={17} />, permission: 'tables:read' },
+  { to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={17} />, permission: 'menu:read' },
+  { to: '/app/bookings', label: 'Bookings', icon: <CalendarClock size={17} />, permission: 'bookings:read' },
+  { to: '/app/inventory', label: 'Inventory', icon: <ShoppingBasket size={17} />, permission: 'inventory:read' },
+  { to: '/app/staff', label: 'Staff', icon: <Users size={17} />, permission: 'staff:read' },
+  { to: '/app/reports', label: 'Reports', icon: <BarChart3 size={17} />, permission: 'reports:read' },
+  { to: '/app/delivery', label: 'Delivery', icon: <Link2 size={17} />, permission: 'integrations:write' },
+  { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={17} />, permission: 'audit:read' },
+  { to: '/app/settings', label: 'Settings', icon: <Settings size={17} />, permission: 'settings:write' },
+];
+
+export function StaffLayout() {
+  const { user, restaurant, ready } = useAuth();
+  useRealtimeShell();
+  const location = useLocation();
+
+  if (!ready) return null;
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!can(user.role, 'orders:read')) return <Navigate to="/floor" replace />;
+
+  const nav = NAV.filter((n) => can(user.role, n.permission));
+
+  return (
+    <AppShell nav={nav} title={restaurant?.name ?? 'Sizzle'} subtitle="Back office">
+      <Outlet />
+    </AppShell>
+  );
+}
+
+export { ShieldCheck };
