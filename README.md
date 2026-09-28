@@ -106,6 +106,29 @@ created: they show on the order card in the back office, in the ticket header on
 (so the packer knows where it is going), and on the bill. Waiters fill them in on `/floor/order`
 when the destination is *Takeaway / counter*; delivery orders get them from the partner payload.
 
+### When a guest presses *Bill please*
+
+The tap does not ask a human for a favour — the server totals **every open order on that table into
+one bill** and pushes it straight back into the guest's browser, which lands on `/bill/...` with the
+UPI QR already cut for that figure. Cashier, owner and manager all get the notification at the same
+moment, and the session room keeps the page live, so the phone shows *Paid — thank you* the second
+the counter confirms it.
+
+If the guest would rather hand over notes, the same bill page has **Pay with cash at the table**.
+That tap rings the waiter on that patch and the counter. The waiter presses *Take ₹…*, confirms the
+notes with the change previewed, and the round moves to the counter as *At the till*; the cashier
+presses **Payment done**, which records the cash, marks the orders complete, closes the session and
+sends the table to *Cleaning* — all on the server, all audited. A waiter can issue a bill and carry
+cash, but `payments:write` is not in the waiter role, so a waiter can never mark money as received.
+
+Waiters can bill a table themselves too: the receipt button on *My tables* at `/floor` issues the
+same combined bill and opens it.
+
+The kitchen ticket for a table carries the **table number** in the header and splits the lines into
+a **veg side and a non-veg side**, so nothing on the pass can be plated for the wrong guest; the
+bill that closes the table combines both sides again. Bill headers pair the Sizzle mark with the
+restaurant's own logo (Owner → Settings → *Logo*, falling back to the restaurant's initials).
+
 ## The five-minute tour
 
 1. Sign in as **Kitchen** in one window and leave the board up.
@@ -115,9 +138,10 @@ when the destination is *Takeaway / counter*; delivery orders get them from the 
    with an add-on and place the order. The ticket lands on the board without a refresh.
 3. Press *Start*, then *Fire*, then *Ready* on the board. The guest's phone flips to "Ready" and
    the waiter's floor map turns green on its own.
-4. Ask for the bill from the guest screen, then sign in as **Cashier**, open *Guest calls*, raise
-   the bill and settle it in cash. Change is calculated on the server. The drawer already shows the
-   UPI QR cut for that exact total.
+4. Press *Bill please* on the guest screen — the phone jumps straight to the total and the counter
+   already has the notification. Either settle it at the till, or press *Pay with cash at the table*
+   on the bill page, then sign in as **Waiter** to take the notes and as **Cashier** to press
+   *Payment done*. Change is calculated on the server and the table goes to *Cleaning* by itself.
 5. Sign in as **Owner** and look at Reports — the order, the discount and the payment are already
    in the numbers.
 
@@ -130,8 +154,9 @@ the client; `seed` is idempotent and `seed:fresh` wipes first.
 Frontend: `npm run dev`, `npm run build`, `npm run preview`, `npm run typecheck`.
 
 The test suites cover pricing and GST rounding, order creation and the state machine, booking
-availability and lifecycle, the UPI link built from a bill total, and the signature checks on both
-payment and delivery webhooks. `cd backend && npm test` — 36 tests.
+availability and lifecycle, one combined bill per table and the cash handoff (including that a
+waiter cannot confirm a payment), the UPI link built from a bill total, and the signature checks on
+both payment and delivery webhooks. `cd backend && npm test` — 40 tests.
 
 ## Configuration
 

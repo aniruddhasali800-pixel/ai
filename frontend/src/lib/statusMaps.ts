@@ -90,6 +90,7 @@ export const REQUEST_LABEL: Record<string, { label: string; emoji: string }> = {
   CUTLERY: { label: 'Cutlery', emoji: '🍴' },
   NAPKIN: { label: 'Napkins', emoji: '🧻' },
   BILL: { label: 'Bill please', emoji: '🧾' },
+  CASH_PAYMENT: { label: 'Pay by cash', emoji: '💵' },
   OTHER: { label: 'Assistance', emoji: '✋' },
 };
 

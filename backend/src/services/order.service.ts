@@ -276,13 +276,23 @@ export async function listOrders(filter: ListOrdersFilter) {
 }
 
 export async function kitchenQueue(restaurantId: string) {
-  return OrderModel.find({
+  const orders = await OrderModel.find({
     restaurantId,
     status: { $in: ['PLACED', 'ACCEPTED', 'PREPARING', 'READY'] },
   })
     .sort({ placedAt: 1 })
     .limit(80)
     .lean();
+
+  // The pass shouts a table number, so the ticket has to carry one — an order id
+  // alone sends a cook walking the corridor guessing whose biryani this is.
+  const tableIds = [...new Set(orders.map((o) => o.tableId).filter((id): id is Types.ObjectId => Boolean(id)))];
+  const tables = tableIds.length ? await TableModel.find({ _id: { $in: tableIds } }).select('number').lean() : [];
+  const numberById = new Map(tables.map((t) => [String(t._id), t.number]));
+  return orders.map((order) => ({
+    ...order,
+    tableNumber: order.tableId ? numberById.get(String(order.tableId)) ?? '' : '',
+  }));
 }
 
 export async function transitionOrder(

@@ -80,6 +80,7 @@ export async function makeProduct(
     price: number;
     taxPercent?: number | null;
     station?: Station;
+    isVeg?: boolean;
     recipe?: { inventoryItemId: Types.ObjectId; qty: number }[];
   },
 ) {
@@ -90,6 +91,7 @@ export async function makeProduct(
     price: input.price,
     taxPercent: input.taxPercent ?? null,
     station: input.station ?? 'MAIN',
+    isVeg: input.isVeg ?? true,
     recipe: input.recipe ?? [],
   });
 }
@@ -159,6 +161,7 @@ export async function makeDiner(): Promise<Diner> {
     makeProduct(restaurantId, category._id, {
       name: 'Butter Chicken',
       price: 320,
+      isVeg: false,
       recipe: [{ inventoryItemId: flour._id, qty: 0.25 }],
     }),
     makeProduct(restaurantId, category._id, { name: 'Cola', price: 90, taxPercent: 12, station: 'BAR' }),

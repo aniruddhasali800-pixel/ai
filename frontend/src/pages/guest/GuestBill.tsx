@@ -1,16 +1,31 @@
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle2, Printer, Receipt } from 'lucide-react';
-import { useQuery } from '../../lib/query';
+import { Banknote, CheckCircle2, Printer, Receipt } from 'lucide-react';
+import { invalidate, useQuery } from '../../lib/query';
+import { http, errMsg, mediaUrl } from '../../lib/api';
+import { joinSession, leaveSession, useRealtimePrefix } from '../../lib/socket';
 import type { PublicBill } from '../../lib/types';
 import { clockTime, dateTime, inr } from '../../lib/format';
-import { Spinner } from '../../components/ui';
+import { MerchantMark, Spinner, VegDot } from '../../components/ui';
 import { UpiQr } from '../../components/UpiQr';
+import { toast } from '../../store/toasts';
 import { useTitle } from '../../hooks/useTitle';
 
 export function GuestBill() {
   const { billToken = '' } = useParams();
   const { data, loading, error } = useQuery<PublicBill>(`guest:bill:${billToken}`, `/public/bill/${billToken}`);
   useTitle(data ? `Bill ${data.billNumber}` : 'Your bill');
+
+  // The counter settles this bill on a different screen — the guest should watch it
+  // happen instead of refreshing and half-expecting to be charged twice.
+  useEffect(() => {
+    const token = data?.sessionToken;
+    if (!token) return;
+    joinSession(token);
+    return () => leaveSession(token);
+  }, [data?.sessionToken]);
+
+  useRealtimePrefix(['bill.', 'payment.', 'session.', 'request.'], () => invalidate(`guest:bill:${billToken}`));
 
   if (loading && !data) return <Spinner label="Fetching your bill…" />;
   if (error) {
@@ -30,11 +45,18 @@ export function GuestBill() {
     <div className="min-h-screen bg-ink-100 px-4 py-6">
       <div className="mx-auto max-w-md overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-ink-200">
         <header className="border-b border-dashed border-ink-200 px-5 py-4 text-center">
-          <p className="font-display text-[13px] font-800 uppercase tracking-[0.2em] text-ember-600">Sizzle</p>
-          <h1 className="mt-1 font-display text-lg font-800 text-ink-900">
-            {b.tableNumber ? `Table ${b.tableNumber}` : 'Takeaway'}
+          <div className="flex items-center justify-center gap-2.5">
+            <MerchantMark
+              name={b.merchant?.name ?? b.tableNumber ?? 'Sizzle'}
+              logoSrc={b.merchant?.logoUrl ? mediaUrl(b.merchant.logoUrl) : undefined}
+            />
+            <p className="font-display text-[13px] font-800 uppercase tracking-[0.2em] text-ember-600">Sizzle</p>
+          </div>
+          <h1 className="mt-1.5 font-display text-lg font-800 text-ink-900">
+            {b.merchant?.name ?? (b.tableNumber ? `Table ${b.tableNumber}` : 'Takeaway')}
           </h1>
           <p className="mt-0.5 text-[12px] text-ink-500">
+            {b.tableNumber ? `Table ${b.tableNumber} · ` : ''}
             {b.billNumber} · issued {clockTime(b.issuedAt)}
             {b.customerName ? ` · ${b.customerName}` : ''}
           </p>
@@ -45,7 +67,9 @@ export function GuestBill() {
             <li key={i} className="flex items-start gap-3 py-2.5">
               <span className="mt-0.5 w-5 shrink-0 text-[13px] font-bold tabular-nums text-ink-500">{it.qty}×</span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-medium text-ink-900">{it.name}</p>
+                <p className="flex items-center gap-1.5 truncate text-[13.5px] font-medium text-ink-900">
+                  <VegDot isVeg={it.isVeg} /> {it.name}
+                </p>
                 {!!it.addons.length && <p className="text-[12px] text-ink-500">+ {it.addons.map((a) => a.name).join(', ')}</p>}
               </div>
               <span className="shrink-0 text-[13px] font-semibold tabular-nums text-ink-800">{inr(it.lineTotal)}</span>
@@ -79,9 +103,13 @@ export function GuestBill() {
           ) : b.pay ? (
             <div className="space-y-2.5">
               <UpiQr charge={b.pay} />
-              <p className="rounded-xl bg-amber-50 px-4 py-2.5 text-[12.5px] font-medium text-amber-800 ring-1 ring-amber-200">
-                Or pay at the counter — cash and cards are welcome.
-              </p>
+              {b.sessionToken ? (
+                <CashButton sessionToken={b.sessionToken} total={b.grandTotal} />
+              ) : (
+                <p className="rounded-xl bg-amber-50 px-4 py-2.5 text-[12.5px] font-medium text-amber-800 ring-1 ring-amber-200">
+                  Or pay at the counter — cash and cards are welcome.
+                </p>
+              )}
             </div>
           ) : (
             <p className="rounded-xl bg-amber-50 px-4 py-3 text-[13px] font-medium text-amber-800 ring-1 ring-amber-200">
@@ -109,5 +137,44 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="text-ink-500">{label}</span>
       <span className="font-medium tabular-nums text-ink-800">{value}</span>
     </div>
+  );
+}
+
+/** Cash is the one payment a phone cannot finish, so the tap only summons a waiter. */
+function CashButton({ sessionToken, total }: { sessionToken: string; total: number }) {
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function ask() {
+    setBusy(true);
+    try {
+      await http.post(`/public/session/${sessionToken}/requests`, { type: 'CASH_PAYMENT' });
+      invalidate(`guest:session:${sessionToken}`);
+      setSent(true);
+      toast(`Waiter called to collect ${inr(total)}`, 'success');
+    } catch (e) {
+      toast(errMsg(e, 'Could not call the waiter'), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-xl bg-ink-50 px-4 py-3 text-[12.5px] font-medium text-ink-700 ring-1 ring-ink-200">
+        <Banknote size={16} className="shrink-0 text-amber-600" />
+        A waiter is coming to take {inr(total)}. You can keep this page open.
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={ask}
+      disabled={busy}
+      className="flex w-full items-center justify-center gap-2 rounded-[10px] border border-ink-300 bg-white py-2.5 text-[13.5px] font-bold text-ink-800 transition-colors hover:bg-ink-50 disabled:opacity-60"
+    >
+      <Banknote size={16} /> Pay with cash at the table
+    </button>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, X } from 'lucide-react';
+import { initials } from '../lib/format';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'dark';
 type Size = 'sm' | 'md' | 'lg';
@@ -446,6 +447,18 @@ export function Money({ amount, className = '' }: { amount: number; className?: 
   return (
     <span className={`font-display tabular-nums ${className}`}>
       ₹{amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+    </span>
+  );
+}
+
+/** The house mark beside the Sizzle wordmark on a bill — a real logo when uploaded, the initials otherwise. */
+export function MerchantMark({ name, logoSrc }: { name: string; logoSrc?: string }) {
+  if (logoSrc) {
+    return <img src={logoSrc} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-ink-200" />;
+  }
+  return (
+    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink-900 font-display text-[12px] font-800 uppercase tracking-tight text-ember-400 ring-1 ring-ink-700">
+      {initials(name)}
     </span>
   );
 }

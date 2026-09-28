@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { BillModel, OrderModel, PaymentModel, TableModel, TableSessionModel, nextSeq } from '../models';
+import { BillModel, OrderModel, PaymentModel, RestaurantModel, TableModel, TableSessionModel, nextSeq } from '../models';
 import { round2, roundToRupee } from '../utils/money';
 import { emit, Events } from '../realtime/emit';
 import { ApiError } from '../utils/httpError';
@@ -146,7 +146,7 @@ export async function createBill(opts: {
 
   emit.toCashier(restaurantId, Events.BILL_CREATED, bill.toObject());
   emit.toRestaurant(restaurantId, Events.BILL_UPDATED, bill.toObject());
-  await notifyRoles(restaurantId, ['CASHIER', 'OWNER'], {
+  await notifyRoles(restaurantId, ['CASHIER', 'OWNER', 'MANAGER'], {
     type: 'BILL_REQUESTED',
     title: `Bill ${billNumber} is ready`,
     body: bill.tableNumber ? `Table ${bill.tableNumber} · ₹${total.toFixed(2)}` : `₹${total.toFixed(2)}`,
@@ -362,11 +362,21 @@ async function settleBill(billId: string, restaurantId: string, paymentId: strin
     }
   }
 
+  const payment = await PaymentModel.findById(paymentId).lean();
+
   if (bill.tableSessionId) {
     await closeSession(bill.tableSessionId);
+    const session = await TableSessionModel.findById(bill.tableSessionId).select('publicToken').lean();
+    if (session) {
+      emit.toSession(session.publicToken, Events.BILL_PAID, {
+        billId: String(bill._id),
+        billNumber: bill.billNumber,
+        grandTotal: bill.grandTotal,
+        method: payment?.method ?? 'CASH',
+      });
+    }
   }
 
-  const payment = await PaymentModel.findById(paymentId).lean();
   emit.toRestaurant(restaurantId, Events.BILL_PAID, {
     billId: String(bill._id),
     billNumber: bill.billNumber,
@@ -467,12 +477,17 @@ export async function markBillPrinted(restaurantId: string, billId: string) {
 export async function publicBillView(publicToken: string) {
   const bill = await BillModel.findOne({ publicToken }).lean();
   if (!bill) throw ApiError.notFound('Bill not found');
-  const orders = await OrderModel.find({ _id: { $in: bill.orderIds } }).lean();
+  const [orders, session, restaurant] = await Promise.all([
+    OrderModel.find({ _id: { $in: bill.orderIds } }).lean(),
+    bill.tableSessionId ? TableSessionModel.findById(bill.tableSessionId).select('publicToken').lean() : Promise.resolve(null),
+    RestaurantModel.findById(bill.restaurantId).select('name branding').lean(),
+  ]);
   const items = orders.flatMap((order) =>
     order.items.map((item) => ({
       name: item.name,
       qty: item.qty,
       price: item.price,
+      isVeg: item.isVeg ?? true,
       addons: item.addons.map((a) => ({ name: a.name, price: a.price })),
       lineTotal: item.lineTotal,
     })),
@@ -492,6 +507,11 @@ export async function publicBillView(publicToken: string) {
     taxBreakup: bill.taxBreakup,
     issuedAt: bill.issuedAt,
     paidAt: bill.paidAt,
+    merchant: restaurant
+      ? { name: restaurant.name, logoUrl: restaurant.branding?.logoUrl ?? '' }
+      : null,
+    /** Lets the guest phone join its own realtime room and see the paid stamp arrive. */
+    sessionToken: session?.publicToken ?? null,
     items,
     pay:
       bill.paymentStatus === 'UNPAID'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChefHat, CircleDot, Receipt, RefreshCw, Bell, Flame } from 'lucide-react';
 import { useQuery, invalidate } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
@@ -11,6 +11,13 @@ import { Button, Spinner, VegDot } from '../../components/ui';
 import { toast } from '../../store/toasts';
 
 const CALLS = ['CALL_WAITER', 'WATER', 'PLATE', 'CUTLERY', 'NAPKIN'] as const;
+
+/** What a posted request comes back with — a settle tap carries the bill it just made. */
+interface GuestRequestResult {
+  _id: string;
+  type: string;
+  bill: { _id: string; billNumber: string; grandTotal: number; publicToken: string } | null;
+}
 
 export function GuestSession() {
   const { publicToken = '' } = useParams();
@@ -134,9 +141,22 @@ export function GuestSession() {
           </h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {CALLS.map((c) => (
-              <CallButton key={c} type={c} token={publicToken} label={REQUEST_LABEL[c]?.label ?? c} emoji={REQUEST_LABEL[c]?.emoji ?? '✋'} />
+              <RequestButton key={c} type={c} token={publicToken} label={REQUEST_LABEL[c]?.label ?? c} emoji={REQUEST_LABEL[c]?.emoji ?? '✋'} />
             ))}
-            <BillButton token={publicToken} />
+            <RequestButton
+              type="BILL"
+              token={publicToken}
+              variant="primary"
+              label="Bill please"
+              emoji={REQUEST_LABEL.BILL.emoji}
+            />
+            <RequestButton
+              type="CASH_PAYMENT"
+              token={publicToken}
+              variant="primary"
+              label="Pay by cash"
+              emoji={REQUEST_LABEL.CASH_PAYMENT.emoji}
+            />
           </div>
           {!!s.requests.length && (
             <ul className="mt-3 space-y-1.5">
@@ -145,7 +165,11 @@ export function GuestSession() {
                   <span>{REQUEST_LABEL[r.type]?.emoji ?? '✋'}</span>
                   <span className="font-medium text-ink-800">{REQUEST_LABEL[r.type]?.label ?? r.type}</span>
                   <span className="ml-auto text-ink-400">
-                    {r.status === 'ACKNOWLEDGED' ? 'on the way' : `${timeAgo(r.createdAt)}`}
+                    {r.collectedAt
+                      ? `cash taken · ${inr(r.tendered ?? 0)} at the counter`
+                      : r.status === 'ACKNOWLEDGED'
+                        ? 'on the way'
+                        : timeAgo(r.createdAt)}
                   </span>
                 </li>
               ))}
@@ -176,44 +200,40 @@ function StatusPill({ status }: { status: keyof typeof ORDER_STATUS_META }) {
   );
 }
 
-function CallButton({ type, token, label, emoji }: { type: string; token: string; label: string; emoji: string }) {
+function RequestButton({
+  type,
+  token,
+  label,
+  emoji,
+  variant = 'secondary',
+}: {
+  type: string;
+  token: string;
+  label: string;
+  emoji: string;
+  variant?: 'primary' | 'secondary';
+}) {
   const [busy, setBusy] = useState(false);
-  async function send() {
-    setBusy(true);
-    try {
-      await http.post(`/public/session/${token}/requests`, { type });
-      invalidate('guest:session');
-      toast('Your waiter has been notified', 'success');
-    } catch (e) {
-      toast(errMsg(e, 'Could not send that'), 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Button variant="secondary" loading={busy} onClick={send} className="h-auto justify-start gap-2 py-3 text-[13px]">
-      <span className="text-[15px] leading-none">{emoji}</span> {label}
-    </Button>
-  );
-}
+  const navigate = useNavigate();
 
-function BillButton({ token }: { token: string }) {
-  const [busy, setBusy] = useState(false);
   async function send() {
     setBusy(true);
     try {
-      await http.post(`/public/session/${token}/requests`, { type: 'BILL' });
+      const { data } = await http.post<GuestRequestResult>(`/public/session/${token}/requests`, { type });
       invalidate('guest:session');
-      toast('Bill requested', 'success');
+      // Billing the table is the whole point of the tap, so go straight to the total.
+      if (data.bill) navigate(`/bill/${data.bill.publicToken}`);
+      else toast(data.type === 'BILL' || data.type === 'CASH_PAYMENT' ? 'The counter has been told' : 'Your waiter has been notified', 'success');
     } catch (e) {
       toast(errMsg(e, 'Could not send that'), 'error');
     } finally {
       setBusy(false);
     }
   }
+
   return (
-    <Button variant="primary" loading={busy} onClick={send} className="h-auto justify-start gap-2 py-3 text-[13px]">
-      <Receipt size={15} /> Bill please
+    <Button variant={variant} loading={busy} onClick={send} className="h-auto justify-start gap-2 py-3 text-[13px]">
+      <span className="text-[15px] leading-none">{emoji}</span> {label}
     </Button>
   );
 }

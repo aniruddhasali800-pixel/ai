@@ -19,10 +19,11 @@ import { emit, Events } from '../../realtime/emit';
 import { openSession, setTableStatus } from '../../services/table.service';
 import { createOrder } from '../../services/order.service';
 import { checkAvailability, createBooking } from '../../services/booking.service';
-import { publicBillView } from '../../services/billing.service';
+import { publicBillView, createBill } from '../../services/billing.service';
 import { notifyRoles } from '../../services/notification.service';
 import { REQUEST_TYPES } from '../../types/constants';
 import { queryOf } from '../../utils/query';
+import type { Role } from '../../types/constants';
 
 export const publicRouter = Router();
 
@@ -185,7 +186,15 @@ publicRouter.get(
         notes: order.notes,
         placedAt: order.placedAt,
       })),
-      requests: requests.map((r) => ({ _id: String(r._id), type: r.type, note: r.note, status: r.status, createdAt: r.createdAt })),
+      requests: requests.map((r) => ({
+        _id: String(r._id),
+        type: r.type,
+        note: r.note,
+        status: r.status,
+        tendered: r.tendered ?? null,
+        collectedAt: r.collectedAt ?? null,
+        createdAt: r.createdAt,
+      })),
       bill: bill
         ? { _id: String(bill._id), billNumber: bill.billNumber, grandTotal: bill.grandTotal, publicToken: bill.publicToken }
         : null,
@@ -247,7 +256,16 @@ const requestSchema = z.object({
   note: z.string().max(200).optional(),
 });
 
-/** Guest calls a waiter, asks for water, or requests the bill. */
+/** Asking for the bill or for the cash round is the same thing: close this table out. */
+const SETTLE_TYPES: string[] = ['BILL', 'CASH_PAYMENT'];
+
+/**
+ * Guest calls a waiter, asks for water, asks for the bill, or asks to pay in cash.
+ *
+ * A settle tap is not a favour to wait for — the bill is totalled right here, so the
+ * phone gets a scannable amount instead of a guest sitting at a table hoping somebody
+ * behind the counter notices.
+ */
 publicRouter.post(
   '/session/:publicToken/requests',
   publicWriteLimiter,
@@ -258,38 +276,101 @@ publicRouter.post(
 
     const table = await TableModel.findById(session.tableId).lean();
     const restaurantId = String(session.restaurantId);
+    const type = req.body.type;
+    const tableNumber = table?.number ?? '';
+
+    let bill = await BillModel.findOne({
+      tableSessionId: session._id,
+      status: 'ISSUED',
+      paymentStatus: 'UNPAID',
+    }).lean();
+
+    if (SETTLE_TYPES.includes(type) && !bill) {
+      try {
+        const created = await createBill({
+          restaurantId,
+          actor: { userId: null, role: 'SYSTEM', name: 'Guest request' },
+          sessionId: String(session._id),
+        });
+        bill = await BillModel.findById(created._id).lean();
+      } catch (err) {
+        // Nothing has been ordered on this table yet, so there is nothing to total.
+        // The counter still hears the ask, exactly as before.
+        if (!(err instanceof ApiError) || err.code !== 'CONFLICT') throw err;
+      }
+    }
 
     const request = await CustomerRequestModel.create({
       restaurantId,
       tableId: session.tableId,
       tableSessionId: session._id,
-      type: req.body.type,
+      type,
       note: req.body.note ?? '',
+      billId: bill?._id ?? null,
     });
 
-    if (req.body.type === 'BILL') {
+    const total = bill ? `₹${bill.grandTotal.toFixed(2)}` : '';
+
+    if (bill) {
+      // createBill has already told the cashier and the owner the bill exists, and pushed
+      // it into this session room, which is what lights up the guest's screen.
+      const roles: Role[] = type === 'CASH_PAYMENT' ? ['WAITER', 'CASHIER'] : ['WAITER'];
+      await notifyRoles(restaurantId, roles, {
+        type: 'BILL_REQUESTED',
+        title:
+          type === 'CASH_PAYMENT'
+            ? `Table ${tableNumber} is paying in cash${total ? ` · ${total}` : ''}`
+            : `Bill ${bill.billNumber} is on Table ${tableNumber}'s phone`,
+        body:
+          type === 'CASH_PAYMENT'
+            ? 'Take the cash from the table, then confirm it at the counter.'
+            : `${total} · scan-to-pay is on the guest's screen`,
+        entityType: 'CustomerRequest',
+        entityId: String(request._id),
+      });
+    } else if (SETTLE_TYPES.includes(type)) {
       await TableSessionModel.updateOne({ _id: session._id }, { status: 'BILL_REQUESTED' });
       if (table && ['OCCUPIED', 'ORDERING', 'FOOD_READY'].includes(table.status)) {
         await setTableStatus(table._id, 'BILL_REQUESTED');
       }
-      await notifyRoles(restaurantId, ['CASHIER', 'WAITER'], {
+      await notifyRoles(restaurantId, ['CASHIER', 'WAITER', 'OWNER'], {
         type: 'BILL_REQUESTED',
-        title: `Table ${table?.number ?? ''} requested the bill`,
-        body: session.customerName ? `${session.customerName} is ready to pay` : 'Guest is ready to pay',
+        title: `Table ${tableNumber} asked to settle up`,
+        body: session.customerName ? `${session.customerName} is ready to pay` : 'Nothing unbilled on this table yet',
         entityType: 'CustomerRequest',
         entityId: String(request._id),
       });
     } else {
-      await notifyRoles(restaurantId, ['WAITER'], {
+      // The bell rings for the waiter on that patch, for everyone else on the floor,
+      // and for the owner — one of them always answers even when a colleague is off.
+      await notifyRoles(restaurantId, ['WAITER', 'OWNER'], {
         type: 'CUSTOMER_REQUEST',
-        title: `Table ${table?.number ?? ''} · ${req.body.type.replace(/_/g, ' ').toLowerCase()}`,
+        title: `Table ${tableNumber} · ${type.replace(/_/g, ' ').toLowerCase()}`,
         body: req.body.note ? String(req.body.note) : 'Guest is waiting for assistance',
         entityType: 'CustomerRequest',
         entityId: String(request._id),
       });
+      if (table?.assignedWaiterId) {
+        emit.toWaiter(String(table.assignedWaiterId), Events.REQUEST_CREATED, {
+          ...request.toObject(),
+          tableNumber,
+          mine: true,
+        });
+      }
     }
 
-    const payload = { ...request.toObject(), tableNumber: table?.number ?? '' };
+    const payload = {
+      ...request.toObject(),
+      tableNumber,
+      bill: bill
+        ? {
+            _id: String(bill._id),
+            billNumber: bill.billNumber,
+            grandTotal: bill.grandTotal,
+            publicToken: bill.publicToken,
+          }
+        : null,
+    };
     emit.toRestaurant(restaurantId, Events.REQUEST_CREATED, payload);
     emit.toSession(session.publicToken, Events.REQUEST_CREATED, payload);
     res.status(201).json(payload);

@@ -23,7 +23,7 @@ export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'ARRIVED' | 'SEATED' | 'CO
 export type PaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'ONLINE';
 export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
 export type BillStatus = 'ISSUED' | 'PAID' | 'VOID' | 'REFUNDED';
-export type RequestType = 'CALL_WAITER' | 'WATER' | 'PLATE' | 'CUTLERY' | 'NAPKIN' | 'BILL' | 'OTHER';
+export type RequestType = 'CALL_WAITER' | 'WATER' | 'PLATE' | 'CUTLERY' | 'NAPKIN' | 'BILL' | 'CASH_PAYMENT' | 'OTHER';
 export type Station = 'MAIN' | 'GRILL' | 'FRY' | 'TANDOOR' | 'BAR' | 'DESSERT';
 export type InventoryUnit = 'KG' | 'G' | 'L' | 'ML' | 'PCS' | 'PACKET';
 export type InventoryTxType = 'DEDUCTION' | 'RECEIPT' | 'ADJUSTMENT' | 'WASTE' | 'RETURN';
@@ -116,6 +116,7 @@ export interface OrderItem {
   qty: number;
   taxPercent: number;
   station: Station;
+  isVeg?: boolean;
   addons: OrderAddon[];
   notes: string;
   lineTotal: number;
@@ -133,6 +134,8 @@ export interface Order {
   orderNumber: string;
   source: OrderSource;
   tableId: string | null;
+  /** Carried on kitchen tickets so the pass calls the right table, not just an order code. */
+  tableNumber?: string;
   tableSessionId: string | null;
   waiterId: string | null;
   cashierId: string | null;
@@ -254,9 +257,15 @@ export interface CustomerRequest {
   status: 'OPEN' | 'ACKNOWLEDGED' | 'DONE';
   handledByUserId: string | null;
   handledAt: string | null;
+  billId: string | null;
+  tendered: number | null;
+  collectedByUserId: string | null;
+  collectedAt: string | null;
   createdAt: string;
   tableNumber?: string;
   mine?: boolean;
+  billNumber?: string | null;
+  billGrandTotal?: number | null;
 }
 
 export interface TaxLine {
@@ -499,7 +508,15 @@ export interface GuestSession {
     notes: string;
     placedAt: string;
   }[];
-  requests: { _id: string; type: RequestType; note: string; status: string; createdAt: string }[];
+  requests: {
+    _id: string;
+    type: RequestType;
+    note: string;
+    status: string;
+    tendered: number | null;
+    collectedAt: string | null;
+    createdAt: string;
+  }[];
   bill: { _id: string; billNumber: string; grandTotal: number; publicToken: string } | null;
   runningTotal: number;
 }
@@ -519,7 +536,18 @@ export interface PublicBill {
   taxBreakup: TaxLine[];
   issuedAt: string;
   paidAt: string | null;
-  items: { name: string; qty: number; price: number; addons: { name: string; price: number }[]; lineTotal: number }[];
+  /** The restaurant's own mark, printed beside the Sizzle one. */
+  merchant: { name: string; logoUrl: string } | null;
+  /** Lets the guest phone join its table's realtime room and watch the bill settle. */
+  sessionToken: string | null;
+  items: {
+    name: string;
+    qty: number;
+    price: number;
+    isVeg: boolean;
+    addons: { name: string; price: number }[];
+    lineTotal: number;
+  }[];
   pay: UpiCharge | null;
 }
 

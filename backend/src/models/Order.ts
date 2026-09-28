@@ -9,6 +9,7 @@ const orderItemSchema = new Schema(
     qty: { type: Number, required: true, min: 1 },
     taxPercent: { type: Number, default: 0 },
     station: { type: String, enum: STATIONS, default: 'MAIN' },
+    isVeg: { type: Boolean, default: true },
     addons: [
       {
         _id: false,

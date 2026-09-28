@@ -11,6 +11,12 @@ const customerRequestSchema = new Schema(
     status: { type: String, enum: ['OPEN', 'ACKNOWLEDGED', 'DONE'], default: 'OPEN' },
     handledByUserId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     handledAt: { type: Date, default: null },
+    /** A guest asking to pay in cash is a request that carries the bill it is about. */
+    billId: { type: Schema.Types.ObjectId, ref: 'Bill', default: null },
+    /** Cash the waiter took at the table; the counter confirms it against this figure. */
+    tendered: { type: Number, default: null },
+    collectedByUserId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    collectedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

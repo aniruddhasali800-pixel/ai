@@ -24,6 +24,7 @@ export interface PricedLine {
   qty: number;
   taxPercent: number;
   station: Station;
+  isVeg: boolean;
   addons: PricedAddon[];
   notes: string;
   lineTotal: number;
@@ -147,6 +148,7 @@ export async function priceOrderItems(opts: {
       qty: item.qty,
       taxPercent: product.taxPercent ?? defaultTaxPercent,
       station: product.station as Station,
+      isVeg: product.isVeg,
       addons: lineAddons,
       notes: (item.notes ?? '').slice(0, 240),
       lineTotal: 0,
@@ -172,6 +174,7 @@ export function externalLines(
       qty: item.qty,
       taxPercent,
       station: 'MAIN',
+      isVeg: true,
       addons: [],
       notes: item.notes ?? '',
       lineTotal: 0,

@@ -61,7 +61,7 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export const BILL_STATUSES = ['ISSUED', 'PAID', 'VOID', 'REFUNDED'] as const;
 export type BillStatus = (typeof BILL_STATUSES)[number];
 
-export const REQUEST_TYPES = ['CALL_WAITER', 'WATER', 'PLATE', 'CUTLERY', 'NAPKIN', 'BILL', 'OTHER'] as const;
+export const REQUEST_TYPES = ['CALL_WAITER', 'WATER', 'PLATE', 'CUTLERY', 'NAPKIN', 'BILL', 'CASH_PAYMENT', 'OTHER'] as const;
 export type RequestType = (typeof REQUEST_TYPES)[number];
 
 export const INVENTORY_UNITS = ['KG', 'G', 'L', 'ML', 'PCS', 'PACKET'] as const;
@@ -134,7 +134,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   WAITER: [
     'menu:read', 'orders:read', 'orders:write', 'orders:status', 'tables:read', 'tables:write',
     'bookings:read', 'bookings:write', 'requests:read', 'requests:write',
-    'billing:read', 'billing:write', 'payments:read', 'payments:write',
+    // A waiter carries cash but never marks it paid — the counter owns payments:write.
+    'billing:read', 'billing:write', 'payments:read',
   ],
 };
 

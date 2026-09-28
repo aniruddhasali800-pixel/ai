@@ -113,9 +113,16 @@ function Ticket({
   const mins = minutesSince(order.placedAt);
   const late = mins >= 20;
   const dropoff = [order.customerAddress, order.customerCity].filter(Boolean).join(', ');
+  const veg = order.items.filter((it) => it.isVeg ?? true);
+  const nonVeg = order.items.filter((it) => !(it.isVeg ?? true));
   return (
     <article className={`animate-in overflow-hidden rounded-xl border bg-ink-900 shadow-lg ${late ? 'border-red-500/50' : 'border-white/10'}`}>
       <header className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
+        {order.tableNumber ? (
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-ember-500 font-display text-[14px] font-800 leading-none text-white">
+            {order.tableNumber}
+          </span>
+        ) : null}
         <span className="font-display text-[15px] font-800 text-white">{order.orderNumber}</span>
         <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-ink-300">
           {SOURCE_META[order.source]?.label}
@@ -131,22 +138,11 @@ function Ticket({
           {order.customerPhone && <p className="text-ink-400">{order.customerName || 'Guest'} · {order.customerPhone}</p>}
         </div>
       )}
-      <ul className="divide-y divide-white/5">
-        {order.items.map((it, idx) => (
-          <li
-            key={idx}
-            className={`flex items-start gap-2 px-3 py-2 ${activeStation !== 'ALL' && it.station === activeStation ? 'bg-ember-500/10' : ''}`}
-          >
-            <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded bg-ember-500 text-[11px] font-bold text-white">{it.qty}</span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[13.5px] font-semibold leading-tight text-ink-100">{it.name}</span>
-              {it.addons?.length > 0 && <span className="block text-[11.5px] text-ink-400">+ {it.addons.map((a) => a.name).join(', ')}</span>}
-              {it.notes && <span className="mt-0.5 block rounded bg-amber-500/15 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-300">{it.notes}</span>}
-              {it.station !== 'MAIN' && <span className="mt-0.5 block text-[10.5px] uppercase tracking-wide text-ink-500">{stationLabel(it.station)}</span>}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {/* A ticket never mixes veg onto a non-veg plate, so the pass reads the two sides apart. */}
+      <div className="grid gap-x-3 xl:grid-cols-2">
+        <TicketSide order={order} items={veg} tone="leaf" activeStation={activeStation} />
+        <TicketSide order={order} items={nonVeg} tone="rose" activeStation={activeStation} />
+      </div>
       {next && (
         <button
           onClick={() => onAdvance(order, next)}
@@ -161,5 +157,47 @@ function Ticket({
         </div>
       )}
     </article>
+  );
+}
+
+function TicketSide({
+  order,
+  items,
+  tone,
+  activeStation,
+}: {
+  order: Order;
+  items: Order['items'];
+  tone: 'leaf' | 'rose';
+  activeStation: Station | 'ALL';
+}) {
+  if (!items.length) return null;
+  return (
+    <div className="border-b border-white/5 last:border-b-0 xl:border-b-0">
+      <p
+        className={`m-2 flex items-center gap-1.5 rounded px-2 py-1 text-[10.5px] font-800 uppercase tracking-[0.12em] ${
+          tone === 'leaf' ? 'bg-leaf-500/15 text-leaf-300' : 'bg-rose-500/15 text-rose-300'
+        }`}
+      >
+        <span className={`h-2.5 w-2.5 rounded-[3px] border ${tone === 'leaf' ? 'border-leaf-500 bg-leaf-500' : 'border-rose-500 bg-rose-500'}`} />
+        {tone === 'leaf' ? 'Veg' : 'Non-veg'} · {items.reduce((n, i) => n + i.qty, 0)}
+      </p>
+      <ul className="divide-y divide-white/5">
+        {items.map((it, idx) => (
+          <li
+            key={`${order._id}-${idx}`}
+            className={`flex items-start gap-2 px-3 py-2 ${activeStation !== 'ALL' && it.station === activeStation ? 'bg-ember-500/10' : ''}`}
+          >
+            <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded bg-ember-500 text-[11px] font-bold text-white">{it.qty}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-semibold leading-tight text-ink-100">{it.name}</span>
+              {it.addons?.length > 0 && <span className="block text-[11.5px] text-ink-400">+ {it.addons.map((a) => a.name).join(', ')}</span>}
+              {it.notes && <span className="mt-0.5 block rounded bg-amber-500/15 px-1.5 py-0.5 text-[11.5px] font-medium text-amber-300">{it.notes}</span>}
+              {it.station !== 'MAIN' && <span className="mt-0.5 block text-[10.5px] uppercase tracking-wide text-ink-500">{stationLabel(it.station)}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

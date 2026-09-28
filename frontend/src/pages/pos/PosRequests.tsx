@@ -1,10 +1,10 @@
-import { CheckCheck, Inbox, ReceiptText } from 'lucide-react';
+import { Banknote, CheckCheck, Inbox, ReceiptText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
-import type { Bill, CustomerRequest } from '../../lib/types';
+import type { Bill, CustomerRequest, Payment } from '../../lib/types';
 import { REQUEST_LABEL } from '../../lib/statusMaps';
-import { timeAgo } from '../../lib/format';
+import { inr, timeAgo } from '../../lib/format';
 import { Button, Card, EmptyState, Pill, Spinner } from '../../components/ui';
 import { toast } from '../../store/toasts';
 import { can, useAuth } from '../../store/auth';
@@ -13,11 +13,13 @@ export function PosRequests() {
   const { user } = useAuth();
   const write = can(user?.role, 'requests:write');
   const bills = can(user?.role, 'billing:write');
+  const settleCash = can(user?.role, 'payments:write');
   const navigate = useNavigate();
   const { data, loading } = useQuery<{ data: CustomerRequest[] }>('requests:list', '/waiters/requests');
   const rows = data?.data ?? [];
   const billCalls = rows.filter((r) => r.type === 'BILL' && r.status !== 'DONE');
-  const rest = rows.filter((r) => !(r.type === 'BILL' && r.status !== 'DONE'));
+  const cashRounds = rows.filter((r) => r.type === 'CASH_PAYMENT' && r.status !== 'DONE');
+  const rest = rows.filter((r) => r.type !== 'BILL' && r.type !== 'CASH_PAYMENT');
 
   async function done(r: CustomerRequest) {
     try {
@@ -45,10 +47,36 @@ export function PosRequests() {
     }
   }
 
+  /** The waiter counted the notes into this request; the drawer closes here. */
+  async function settle(r: CustomerRequest) {
+    try {
+      const { data: res } = await http.post<{ payment: Payment }>(`/waiters/requests/${r._id}/settle`, {});
+      invalidate('requests');
+      invalidate('bills');
+      invalidate('tables');
+      const change = res.payment.change ?? 0;
+      toast(
+        `${r.billNumber ?? 'Bill'} paid · table ${r.tableNumber ?? ''}${change ? ` · change ${inr(change)}` : ''}`,
+        'success',
+      );
+    } catch (e) {
+      toast(errMsg(e, 'Could not settle that cash round'), 'error');
+    }
+  }
+
   if (loading && !data) return <Spinner label="Loading guest calls…" />;
 
   return (
     <div className="space-y-4">
+      <RequestGroup
+        title="Cash from tables"
+        hint="A waiter collected these notes — confirm the amount and close the table"
+        rows={cashRounds}
+        write={write}
+        onDone={done}
+        onSettle={settleCash ? settle : undefined}
+        collectedHint
+      />
       <RequestGroup
         title="Bill requests"
         hint="Issue the bill, then settle it at the counter"
@@ -74,6 +102,8 @@ function RequestGroup({
   write,
   onDone,
   onBill,
+  onSettle,
+  collectedHint,
 }: {
   title: string;
   hint: string;
@@ -81,6 +111,8 @@ function RequestGroup({
   write: boolean;
   onDone: (r: CustomerRequest) => Promise<void>;
   onBill?: ((r: CustomerRequest) => Promise<void>) | undefined;
+  onSettle?: ((r: CustomerRequest) => Promise<void>) | undefined;
+  collectedHint?: boolean;
 }) {
   if (!rows.length) return null;
   return (
@@ -94,18 +126,34 @@ function RequestGroup({
             <div className="min-w-0 flex-1 leading-tight">
               <p className="truncate text-[13.5px] font-semibold text-ink-900">
                 Table {r.tableNumber || '—'} · {REQUEST_LABEL[r.type]?.label ?? r.type}
+                {r.billGrandTotal ? ` · ${inr(r.billGrandTotal)}` : ''}
               </p>
-              <p className="truncate text-[12px] text-ink-500">{r.note || timeAgo(r.createdAt)}</p>
+              <p className="truncate text-[12px] text-ink-500">
+                {collectedHint
+                  ? r.collectedAt
+                    ? `waiter took ${inr(r.tendered ?? 0)} · ${timeAgo(r.collectedAt)}`
+                    : 'the waiter has not picked the cash up yet'
+                  : r.note || timeAgo(r.createdAt)}
+              </p>
             </div>
             <Pill className={r.status === 'ACKNOWLEDGED' ? 'bg-blue-50 text-blue-800 ring-blue-200' : 'bg-amber-50 text-amber-800 ring-amber-200'}>
-              {r.status === 'ACKNOWLEDGED' ? 'On it' : 'Waiting'}
+              {r.status === 'ACKNOWLEDGED' ? (collectedHint ? 'At the till' : 'On it') : 'Waiting'}
             </Pill>
             {onBill && (
               <Button size="sm" icon={<ReceiptText size={14} />} onClick={() => void onBill(r)}>
                 Raise bill
               </Button>
             )}
-            {write && <Button size="sm" variant="secondary" icon={<CheckCheck size={14} />} onClick={() => void onDone(r)}>Done</Button>}
+            {onSettle && r.collectedAt && (
+              <Button size="sm" variant="success" icon={<Banknote size={14} />} onClick={() => void onSettle(r)}>
+                Payment done
+              </Button>
+            )}
+            {write && !onSettle && (
+              <Button size="sm" variant="secondary" icon={<CheckCheck size={14} />} onClick={() => void onDone(r)}>
+                Done
+              </Button>
+            )}
           </li>
         ))}
       </ul>

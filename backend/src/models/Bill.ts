@@ -27,7 +27,8 @@ const billSchema = new Schema(
     status: { type: String, enum: BILL_STATUSES, default: 'ISSUED' },
     paymentStatus: { type: String, enum: ['UNPAID', 'PAID', 'REFUNDED'], default: 'UNPAID' },
     publicToken: { type: String, required: true, unique: true },
-    issuedByUserId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    /** Null when the guest's own "bill please" tap issued it — no staff member pressed the button. */
+    issuedByUserId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     issuedAt: { type: Date, default: () => new Date() },
     paidAt: { type: Date, default: null },
     printCount: { type: Number, default: 0 },

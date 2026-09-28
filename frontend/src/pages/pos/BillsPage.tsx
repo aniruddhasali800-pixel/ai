@@ -4,7 +4,7 @@ import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
 import type { Bill, Order, Paginated, Payment, UpiCharge } from '../../lib/types';
 import { BILL_STATUS_META, PAYMENT_STATUS_META } from '../../lib/statusMaps';
-import { clockTime, dateTime, inr } from '../../lib/format';
+import { clockTime, dateTime, initials, inr } from '../../lib/format';
 import { Button, Card, Drawer, EmptyState, Field, Input, Modal, SegmentedControl, Select, Spinner, StatTile, Textarea } from '../../components/ui';
 import { UpiQr } from '../../components/UpiQr';
 import { can, useAuth } from '../../store/auth';
@@ -383,9 +383,14 @@ function Line({ label, value }: { label: string; value: string }) {
 function printBill(b: Bill, deliverTo = '', qr = '') {
   const w = window.open('', '_blank');
   if (!w) return;
+  const merchant = useAuth.getState().restaurant?.name ?? 'Sizzle';
   w.document.write(
     `<title>${b.billNumber}</title><body style="font-family:ui-sans-serif,system-ui;padding:24px;max-width:340px;margin:auto">` +
-    `<h3 style="margin:0 0 4px">Sizzle</h3><p style="margin:0 0 12px;font-size:12px">${b.billNumber} · Table ${b.tableNumber || '—'}</p>` +
+    `<div style="display:flex;align-items:center;gap:8px;margin:0 0 2px">` +
+    `<span style="display:inline-grid;place-items:center;width:34px;height:34px;border-radius:8px;background:#111827;color:#f59e0b;font-weight:800;font-size:12px">${escapeHtml(initials(merchant))}</span>` +
+    `<span style="font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#ea580c;font-size:12px">Sizzle</span></div>` +
+    `<h3 style="margin:8px 0 4px">${escapeHtml(merchant)}</h3>` +
+    `<p style="margin:0 0 12px;font-size:12px">${b.billNumber} · Table ${b.tableNumber || '—'}</p>` +
     (deliverTo ? `<p style="font-size:12px;margin:0 0 12px"><b>Deliver to:</b> ${escapeHtml(deliverTo)}</p>` : '') +
     `<p style="font-size:16px;font-weight:700;margin:12px 0">Total ${inr(b.grandTotal)}</p>` +
     (qr ? `<img src="${qr}" width="160" height="160" alt="UPI QR"><p style="font-size:11px;margin:4px 0 12px">Scan to pay ${inr(b.grandTotal)}</p>` : '') +

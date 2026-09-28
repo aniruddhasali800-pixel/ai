@@ -16,6 +16,7 @@ function line(partial: Partial<PricedLine> & { price: number; qty: number }): Pr
     qty: 1,
     taxPercent: 5,
     station: 'MAIN',
+    isVeg: true,
     addons: [],
     notes: '',
     lineTotal: 0,
