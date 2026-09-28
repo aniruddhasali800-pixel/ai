@@ -1,12 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import {
-  AddonModel,
   BillModel,
-  CategoryModel,
   CustomerRequestModel,
   OrderModel,
-  ProductModel,
   RestaurantModel,
   TableModel,
   TableSessionModel,
@@ -18,6 +15,15 @@ import { ApiError } from '../../utils/httpError';
 import { emit, Events } from '../../realtime/emit';
 import { openSession, setTableStatus } from '../../services/table.service';
 import { createOrder } from '../../services/order.service';
+import {
+  appOrderView,
+  confirmAppCheckout,
+  listAppRestaurants,
+  placeAppOrder,
+  publicMenu,
+  restaurantBySlug,
+  startAppCheckout,
+} from '../../services/customerApp.service';
 import { checkAvailability, createBooking } from '../../services/booking.service';
 import { publicBillView, createBill } from '../../services/billing.service';
 import { notifyRoles } from '../../services/notification.service';
@@ -46,50 +52,15 @@ publicRouter.get(
   '/menu/:tableToken',
   asyncHandler(async (req, res) => {
     const table = await tableByQrToken(req.params.tableToken);
-    const restaurant = await RestaurantModel.findById(table.restaurantId).lean();
-    if (!restaurant) throw ApiError.notFound('Restaurant not found');
+    const menu = await publicMenu(String(table.restaurantId));
 
     const session = table.activeSessionId
       ? await TableSessionModel.findOne({ _id: table.activeSessionId, status: { $ne: 'CLOSED' } }).lean()
       : null;
 
-    const [categories, products, addons] = await Promise.all([
-      CategoryModel.find({ restaurantId: restaurant._id, isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
-      ProductModel.find({ restaurantId: restaurant._id, isActive: true }).sort({ sortOrder: 1, name: 1 }).lean(),
-      AddonModel.find({ restaurantId: restaurant._id, isActive: true }).sort({ name: 1 }).lean(),
-    ]);
-
     res.json({
-      restaurant: {
-        _id: String(restaurant._id),
-        name: restaurant.name,
-        slug: restaurant.slug,
-        phone: restaurant.phone ?? '',
-        address: restaurant.address,
-        currency: restaurant.currency,
-        hours: restaurant.hours,
-        branding: restaurant.branding,
-        acceptingOrders: restaurant.settings?.acceptingOrders ?? true,
-        bookingEnabled: restaurant.settings?.bookingEnabled ?? true,
-        taxPercent: restaurant.taxPercent,
-        serviceChargePercent: restaurant.serviceChargePercent,
-      },
+      ...menu,
       table: { _id: String(table._id), number: table.number, section: table.section, status: table.status },
-      categories: categories.map((c) => ({ _id: String(c._id), name: c.name, description: c.description })),
-      products: products.map((p) => ({
-        _id: String(p._id),
-        categoryId: String(p.categoryId),
-        name: p.name,
-        description: p.description,
-        price: p.price,
-        imageUrl: p.imageUrl,
-        isVeg: p.isVeg,
-        taxPercent: p.taxPercent,
-        prepMinutes: p.prepMinutes,
-        tags: p.tags,
-        addonIds: p.addonIds.map((id) => String(id)),
-      })),
-      addons: addons.map((a) => ({ _id: String(a._id), name: a.name, price: a.price })),
       session: session
         ? {
             publicToken: session.publicToken,
@@ -98,6 +69,127 @@ publicRouter.get(
             customerName: session.customerName,
           }
         : null,
+    });
+  }),
+);
+
+/** The same menu, served to the installed guest app before any table is involved. */
+publicRouter.get(
+  '/apps/restaurants',
+  asyncHandler(async (_req, res) => {
+    res.json(await listAppRestaurants());
+  }),
+);
+
+publicRouter.get(
+  '/apps/menu/:slug',
+  asyncHandler(async (req, res) => {
+    const restaurant = await restaurantBySlug(req.params.slug);
+    res.json(await publicMenu(String(restaurant._id)));
+  }),
+);
+
+const orderItemSchema = z.object({
+  productId: z.string().min(1),
+  qty: z.number().int().min(1).max(99),
+  addonIds: z.array(z.string()).max(12).optional(),
+  notes: z.string().max(240).optional(),
+});
+
+const appOrderSchema = z.object({
+  fulfilment: z.enum(['PICKUP', 'DELIVERY']),
+  paymentMode: z.enum(['UPI', 'CARD', 'CASH_ON_DELIVERY']),
+  customerName: z.string().min(2).max(80),
+  customerPhone: z.string().min(8).max(20),
+  customerAddress: z.string().max(240).optional(),
+  customerCity: z.string().max(80).optional(),
+  notes: z.string().max(300).optional(),
+  items: orderItemSchema.array().min(1).max(60),
+});
+
+/** An app order has no table, so the guest's name, phone and address are the ticket. */
+publicRouter.post(
+  '/apps/orders/:slug',
+  publicWriteLimiter,
+  validate({ body: appOrderSchema }),
+  asyncHandler(async (req, res) => {
+    const restaurant = await restaurantBySlug(req.params.slug);
+    const { order, bill } = await placeAppOrder({
+      restaurantId: String(restaurant._id),
+      fulfilment: req.body.fulfilment,
+      paymentMode: req.body.paymentMode,
+      customerName: req.body.customerName,
+      customerPhone: req.body.customerPhone,
+      customerAddress: req.body.customerAddress ?? '',
+      customerCity: req.body.customerCity || restaurant.address?.city || '',
+      notes: req.body.notes,
+      items: req.body.items,
+    });
+
+    res.status(201).json({
+      order: {
+        _id: String(order._id),
+        orderNumber: order.orderNumber,
+        status: order.status,
+        fulfilment: order.fulfilment,
+        paymentMode: order.paymentMode,
+        grandTotal: order.grandTotal,
+        trackingToken: order.trackingToken,
+      },
+      bill: bill
+        ? { billNumber: bill.billNumber, grandTotal: bill.grandTotal, publicToken: bill.publicToken }
+        : null,
+    });
+  }),
+);
+
+/** Live status of one app order, reachable only through its tracking token. */
+publicRouter.get(
+  '/apps/orders/:trackingToken',
+  validate({ params: z.object({ trackingToken: z.string().min(8).max(64) }) }),
+  asyncHandler(async (req, res) => {
+    res.json(await appOrderView(req.params.trackingToken));
+  }),
+);
+
+/**
+ * Card checkout for an app order. The gateway record starts PENDING and only the
+ * verified webhook path can move it — a guest tap can never mark money as received.
+ */
+publicRouter.post(
+  '/apps/orders/:trackingToken/checkout',
+  publicWriteLimiter,
+  validate({
+    params: z.object({ trackingToken: z.string().min(8).max(64) }),
+    body: z.object({ method: z.enum(['CARD', 'UPI']) }),
+  }),
+  asyncHandler(async (req, res) => {
+    const payment = await startAppCheckout(req.params.trackingToken, req.body.method);
+    res.status(201).json({
+      payment: {
+        _id: String(payment._id),
+        method: payment.method,
+        amount: payment.amount,
+        status: payment.status,
+        checkoutUrl: payment.checkoutUrl,
+      },
+    });
+  }),
+);
+
+/**
+ * Sandbox gateway callback, driven by the guest's own tracking link. Real providers
+ * post to /api/webhooks instead; this route refuses anything that is not a MOCK payment.
+ */
+publicRouter.post(
+  '/apps/orders/:trackingToken/checkout/confirm',
+  publicWriteLimiter,
+  validate({ params: z.object({ trackingToken: z.string().min(8).max(64) }) }),
+  asyncHandler(async (req, res) => {
+    const { payment, bill } = await confirmAppCheckout(req.params.trackingToken);
+    res.json({
+      payment: payment ? { _id: String(payment._id), method: payment.method, amount: payment.amount, status: payment.status } : null,
+      bill: bill ? { paymentStatus: bill.paymentStatus, grandTotal: bill.grandTotal } : null,
     });
   }),
 );
@@ -206,17 +298,7 @@ publicRouter.get(
 );
 
 const orderSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        productId: z.string().min(1),
-        qty: z.number().int().min(1).max(99),
-        addonIds: z.array(z.string()).max(12).optional(),
-        notes: z.string().max(240).optional(),
-      }),
-    )
-    .min(1)
-    .max(60),
+  items: orderItemSchema.array().min(1).max(60),
   customerName: z.string().max(80).optional(),
   notes: z.string().max(300).optional(),
 });

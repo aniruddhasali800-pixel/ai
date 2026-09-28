@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import type {
   BillStatus,
   BookingStatus,
+  Fulfilment,
+  OrderPaymentMode,
   OrderSource,
   OrderStatus,
   PaymentStatus,
@@ -38,7 +40,49 @@ export const SOURCE_META: Record<OrderSource, { label: string; short: string }> 
   WEBSITE: { label: 'Website', short: 'WB' },
   PHONE: { label: 'Phone', short: 'PH' },
   OTHER: { label: 'Other', short: '—' },
+  CUSTOMER_APP: { label: 'Guest app', short: 'AP' },
 };
+
+export const FULFILMENT_LABEL: Record<Fulfilment, string> = {
+  DINE_IN: 'Eat in',
+  PICKUP: 'Pickup',
+  DELIVERY: 'Home delivery',
+};
+
+export const PAYMENT_MODE_LABEL: Record<Exclude<OrderPaymentMode, ''>, string> = {
+  UPI: 'Pays by UPI',
+  CARD: 'Pays by card',
+  CASH_ON_DELIVERY: 'Cash on delivery',
+};
+
+/**
+ * The guest's own words for the same ticket: the kitchen says READY for a table and
+ * a packed bag for a rider, so the tracker cannot reuse the staff label — and it never
+ * repeats the chip above it.
+ */
+export function ticketStageCopy(status: OrderStatus, fulfilment: Fulfilment): string {
+  if (status === 'PLACED') return 'Sent to the kitchen';
+  if (status === 'ACCEPTED') return 'The kitchen has your order';
+  if (status === 'PREPARING') return 'Being cooked right now';
+  if (status === 'READY') {
+    return fulfilment === 'DELIVERY' ? 'Packed — waiting for a rider' : fulfilment === 'PICKUP' ? 'Ready to collect' : 'On the pass';
+  }
+  if (status === 'SERVED') {
+    return fulfilment === 'DELIVERY' ? 'Out for delivery' : fulfilment === 'PICKUP' ? 'Collected' : 'Served';
+  }
+  if (status === 'COMPLETED') {
+    return fulfilment === 'DELIVERY' ? 'Delivered' : fulfilment === 'PICKUP' ? 'All yours' : 'Finished';
+  }
+  return 'Closed';
+}
+
+/** The two-word chip on the guest's tracker — never the kitchen's shorthand. */
+export function stageShortLabel(status: OrderStatus, fulfilment: Fulfilment): string {
+  if (status === 'SERVED') return fulfilment === 'DELIVERY' ? 'On the way' : fulfilment === 'PICKUP' ? 'Collected' : 'Served';
+  if (status === 'PREPARING') return 'Cooking';
+  if (status === 'COMPLETED') return 'Done';
+  return ORDER_STATUS_META[status].label;
+}
 
 export const BOOKING_STATUS_META: Record<BookingStatus, { label: string; cls: string }> = {
   PENDING: { label: 'Pending', cls: 'bg-amber-50 text-amber-800 ring-amber-200' },

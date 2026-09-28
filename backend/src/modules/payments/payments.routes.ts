@@ -6,11 +6,9 @@ import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/rbac';
 import { ApiError } from '../../utils/httpError';
-import { env } from '../../config/env';
-import { hmacHex, randomToken } from '../../utils/tokens';
 import { refundPayment } from '../../services/billing.service';
+import { captureMockPayment } from '../../services/mockCapture';
 import { PAYMENT_METHODS, PAYMENT_STATUSES } from '../../types/constants';
-import { handleGatewayWebhook } from './payments.webhook';
 import { queryOf } from '../../utils/query';
 
 export const paymentsRouter = Router();
@@ -121,34 +119,16 @@ paymentsRouter.post(
   asyncHandler(async (req, res) => {
     const payment = await PaymentModel.findOne({ _id: req.params.id, restaurantId: req.auth!.restaurantId }).lean();
     if (!payment) throw ApiError.notFound('Payment not found');
-    if (payment.provider !== 'MOCK') {
-      throw ApiError.badRequest('Only sandbox payments can be simulated');
-    }
     if (payment.status !== 'PENDING') {
       throw ApiError.conflict('This payment is no longer awaiting a gateway callback');
     }
 
-    const payload =
-      req.body.outcome === 'SUCCESS'
-        ? {
-            event: 'payment.captured',
-            payload: {
-              payment: {
-                entity: { id: `mockpay_${randomToken(8)}`, order_id: payment.providerOrderId, status: 'captured' },
-              },
-            },
-          }
-        : {
-            event: 'payment.failed',
-            payload: {
-              payment: { entity: { order_id: payment.providerOrderId, error_description: req.body.reason ?? 'Payment declined by bank' } },
-            },
-          };
-
-    const raw = JSON.stringify(payload);
-    const signature = hmacHex(env.PAYMENT_WEBHOOK_SECRET, raw);
-    const result = await handleGatewayWebhook('MOCK', raw, signature);
-    if (!result.ok) throw new ApiError(result.status ?? 400, result.message);
+    const result = await captureMockPayment({
+      providerOrderId: payment.providerOrderId ?? '',
+      provider: payment.provider,
+      outcome: req.body.outcome,
+      reason: req.body.reason,
+    });
 
     res.json({ ok: true, outcome: req.body.outcome, message: result.message });
   }),

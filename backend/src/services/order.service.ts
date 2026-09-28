@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { OrderModel, RestaurantModel, TableModel, TableSessionModel, nextSeq } from '../models';
+import { OrderModel, ProductModel, RestaurantModel, TableModel, TableSessionModel, nextSeq, type Order as OrderRow } from '../models';
 import {
   priceOrderItems,
   computeTotals,
@@ -31,7 +31,55 @@ const SOURCE_PREFIX: Record<OrderSource, string> = {
   WEBSITE: 'W',
   PHONE: 'P',
   OTHER: 'O',
+  CUSTOMER_APP: 'A',
 };
+
+/** Sources a guest can reach without a staff member typing the order in. */
+const PUBLIC_SOURCES: OrderSource[] = ['DINE_IN_QR', 'WEBSITE', 'CUSTOMER_APP'];
+
+/**
+ * The copy a guest sees depends on how the food travels: the same READY ticket is
+ * "on the pass" for a table and "ready for the rider" for a delivery.
+ */
+export function fulfilmentWord(fulfilment: string, kind: 'ready' | 'handed' | 'closed'): string {
+  const table = { ready: 'is on the pass', handed: 'was served', closed: 'is closed' };
+  const pickup = { ready: 'is ready for pickup', handed: 'has been collected', closed: 'is collected' };
+  const delivery = { ready: 'is packed, waiting for a rider', handed: 'is out for delivery', closed: 'is delivered' };
+  const map = fulfilment === 'PICKUP' ? pickup : fulfilment === 'DELIVERY' ? delivery : table;
+  return map[kind];
+}
+
+export function fulfilmentLabel(fulfilment: string): string {
+  const map: Record<string, string> = { DINE_IN: 'Dine-in', PICKUP: 'Pickup', DELIVERY: 'Home delivery' };
+  return map[fulfilment] ?? 'Order';
+}
+
+export function paymentModeLabel(mode: string): string {
+  const map: Record<string, string> = { UPI: 'pay by UPI', CARD: 'card on checkout', CASH_ON_DELIVERY: 'cash on delivery' };
+  return map[mode] ?? 'payment at the counter';
+}
+
+/** Only the guest's own slice of the ticket crosses the wire into their tracking room. */
+function ticketForGuest(order: OrderRow) {
+  return {
+    orderNumber: order.orderNumber,
+    status: order.status,
+    fulfilment: order.fulfilment,
+    paymentMode: order.paymentMode,
+    paymentStatus: order.paymentStatus,
+    subtotal: order.subtotal,
+    taxTotal: order.taxTotal,
+    serviceCharge: order.serviceCharge,
+    grandTotal: order.grandTotal,
+    placedAt: order.placedAt,
+    acceptedAt: order.acceptedAt,
+    readyAt: order.readyAt,
+    servedAt: order.servedAt,
+    completedAt: order.completedAt,
+    riderName: order.riderName ?? '',
+    statusHistory: order.statusHistory,
+  };
+}
 
 export function statusEventName(status: OrderStatus): string {
   const map: Record<OrderStatus, string> = {
@@ -67,6 +115,10 @@ export interface CreateOrderInput {
   restaurantId: string;
   source: OrderSource;
   actor?: Actor;
+  fulfilment?: 'DINE_IN' | 'PICKUP' | 'DELIVERY';
+  paymentMode?: '' | 'UPI' | 'CARD' | 'CASH_ON_DELIVERY';
+  trackingToken?: string;
+  riderName?: string;
   tableId?: string | null;
   tableSessionId?: string | null;
   waiterId?: string | null;
@@ -93,7 +145,7 @@ export async function createOrder(input: CreateOrderInput) {
   const restaurant = await RestaurantModel.findById(input.restaurantId).lean();
   if (!restaurant) throw ApiError.notFound('Restaurant not found');
 
-  const isPublicFacing = input.source === 'DINE_IN_QR' || input.source === 'WEBSITE';
+  const isPublicFacing = PUBLIC_SOURCES.includes(input.source);
   if (isPublicFacing && !restaurant.settings?.acceptingOrders) {
     throw ApiError.conflict('This restaurant is not accepting orders right now');
   }
@@ -134,6 +186,10 @@ export async function createOrder(input: CreateOrderInput) {
     restaurantId: input.restaurantId,
     orderNumber,
     source: input.source,
+    fulfilment: input.fulfilment ?? 'DINE_IN',
+    paymentMode: input.paymentMode ?? '',
+    trackingToken: input.trackingToken,
+    riderName: input.riderName ?? '',
     tableId: input.tableId ?? null,
     tableSessionId: input.tableSessionId ?? null,
     waiterId: input.waiterId ?? null,
@@ -220,13 +276,40 @@ export async function createOrder(input: CreateOrderInput) {
     });
   }
 
+  if (input.source === 'CUSTOMER_APP') {
+    emit.toRestaurant(restaurantId, Events.DELIVERY_ORDER, payload);
+    emit.toOrder(order.trackingToken, Events.ORDER_CREATED, ticketForGuest(order.toObject()));
+    // The app ticket has no waiter carrying it in, so the floor, the counter and the
+    // owner all hear it at once — whoever is standing nearest picks it up.
+    await notifyRoles(restaurantId, ['OWNER', 'MANAGER', 'WAITER', 'CASHIER'], {
+      type: 'DELIVERY_ORDER',
+      title: `App order ${orderNumber} · ${fulfilmentLabel(order.fulfilment)}`,
+      body: `${input.customerName || 'Guest'} · ₹${totals.grandTotal.toFixed(2)} · ${paymentModeLabel(order.paymentMode)}`,
+      entityType: 'Order',
+      entityId: String(order._id),
+    });
+  }
+
   return order.toObject();
 }
 
 export async function getOrder(restaurantId: string, orderId: string) {
   const order = await OrderModel.findOne({ _id: orderId, restaurantId }).lean();
   if (!order) throw ApiError.notFound('Order not found');
-  return order;
+  return withItemImages(order);
+}
+
+/**
+ * A ticket freezes the name and the price, but the photo is part of the live menu —
+ * the owner uploads it after the order exists and every open ticket should show it.
+ */
+async function withItemImages<T extends object>(order: T): Promise<T> {
+  const items = (order as { items?: { productId?: unknown }[] }).items ?? [];
+  const ids = [...new Set(items.map((i) => String(i.productId ?? '')).filter((id) => id.length === 24))];
+  if (!ids.length) return order;
+  const products = await ProductModel.find({ _id: { $in: ids } }).select('imageUrl').lean();
+  const imageById = new Map(products.map((p) => [String(p._id), p.imageUrl ?? '']));
+  return { ...order, items: items.map((i) => ({ ...i, imageUrl: imageById.get(String(i.productId ?? '')) ?? '' })) };
 }
 
 export interface ListOrdersFilter {
@@ -300,7 +383,7 @@ export async function transitionOrder(
   orderId: string,
   next: OrderStatus,
   actor: Actor,
-  opts: { system?: boolean; reason?: string } = {},
+  opts: { system?: boolean; reason?: string; riderName?: string } = {},
 ) {
   const order = await OrderModel.findOne({ _id: orderId, restaurantId });
   if (!order) throw ApiError.notFound('Order not found');
@@ -326,11 +409,34 @@ export async function transitionOrder(
   if (next === 'SERVED') order.servedAt = now;
   if (next === 'COMPLETED') order.completedAt = now;
   if (next === 'CANCELLED') order.cancelReason = opts.reason ?? '';
+  if (opts.riderName) order.riderName = opts.riderName;
   await order.save();
 
   const payload = order.toObject();
   emit.toKitchen(restaurantId, statusEventName(next), payload);
   emit.toRestaurant(restaurantId, Events.ORDER_UPDATED, payload);
+  emit.toOrder(order.trackingToken, statusEventName(next), ticketForGuest(payload));
+
+  if (order.source === 'CUSTOMER_APP' && ['READY', 'SERVED', 'COMPLETED'].includes(next)) {
+    const kind = next === 'READY' ? 'ready' : next === 'SERVED' ? 'handed' : 'closed';
+    await notifyRoles(restaurantId, next === 'READY' ? ['MANAGER', 'WAITER'] : ['MANAGER'], {
+      type: next === 'READY' ? 'ORDER_READY' : 'SYSTEM',
+      title: `App order ${order.orderNumber} ${fulfilmentWord(order.fulfilment, kind)}`,
+      body: order.riderName ? `Rider: ${order.riderName}` : `${fulfilmentLabel(order.fulfilment)} · ₹${order.grandTotal}`,
+      entityType: 'Order',
+      entityId: String(order._id),
+    });
+    // Cash on delivery only closes when the counter has the money in the drawer.
+    if (next === 'COMPLETED' && order.paymentMode === 'CASH_ON_DELIVERY' && order.paymentStatus !== 'PAID') {
+      await notifyRoles(restaurantId, ['CASHIER'], {
+        type: 'BILL_REQUESTED',
+        title: `Collect ₹${order.grandTotal} for ${order.orderNumber}`,
+        body: `${fulfilmentLabel(order.fulfilment)} was closed with cash still owed`,
+        entityType: 'Order',
+        entityId: String(order._id),
+      });
+    }
+  }
 
   const session = order.tableSessionId
     ? await TableSessionModel.findById(order.tableSessionId).select('publicToken').lean()

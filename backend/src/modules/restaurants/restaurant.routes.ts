@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import QRCode from 'qrcode';
 import { RestaurantModel } from '../../models';
+import { env } from '../../config/env';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
@@ -19,6 +21,19 @@ restaurantRouter.get(
     const restaurant = await RestaurantModel.findById(req.auth!.restaurantId).lean();
     if (!restaurant) throw ApiError.notFound('Restaurant not found');
     res.json(restaurant);
+  }),
+);
+
+/** The sticker for the counter, the bag and the delivery box. */
+restaurantRouter.get(
+  '/app-qr',
+  requirePermission('settings:write'),
+  asyncHandler(async (req, res) => {
+    const restaurant = await RestaurantModel.findById(req.auth!.restaurantId).lean();
+    if (!restaurant) throw ApiError.notFound('Restaurant not found');
+    const url = `${String(env.PUBLIC_BASE_URL).replace(/\/$/, '')}/eat/${restaurant.slug}`;
+    const dataUrl = await QRCode.toDataURL(url, { margin: 1, width: 420, errorCorrectionLevel: 'M' });
+    res.json({ url, dataUrl });
   }),
 );
 
@@ -60,6 +75,7 @@ const patchSchema = z.object({
       bookingDurationMinutes: z.number().min(15).max(300).optional(),
       bookingReminderMinutes: z.number().min(5).max(240).optional(),
       allowWaiterCash: z.boolean().optional(),
+      deliveryEnabled: z.boolean().optional(),
     })
     .optional(),
 });

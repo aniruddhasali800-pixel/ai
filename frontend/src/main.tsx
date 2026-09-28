@@ -17,3 +17,11 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// The offline shell only exists in a production build; a failed registration must
+// never break the app, and waiting for it must never delay first paint.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
+  });
+}

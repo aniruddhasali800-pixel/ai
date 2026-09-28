@@ -43,6 +43,7 @@ const ROOM = {
   waiter: (userId: string) => roomNames.waiter(userId),
   user: (userId: string) => roomNames.user(userId),
   session: (token: string) => roomNames.session(token),
+  order: (token: string) => roomNames.order(token),
 };
 
 function safeEmit(room: string, event: string, payload: unknown) {
@@ -73,5 +74,10 @@ export const emit = {
   },
   toSession(sessionToken: string, event: string, payload?: unknown) {
     safeEmit(ROOM.session(sessionToken), event, payload ?? {});
+  },
+  /** One guest following one ticket home. Silently does nothing without a tracking token. */
+  toOrder(trackingToken: string | null | undefined, event: string, payload?: unknown) {
+    if (!trackingToken) return;
+    safeEmit(ROOM.order(trackingToken), event, payload ?? {});
   },
 };

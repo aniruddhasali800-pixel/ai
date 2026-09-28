@@ -36,6 +36,11 @@ const GuestSession = lazy(() => import('./pages/guest/GuestSession').then((m) =>
 const GuestBill = lazy(() => import('./pages/guest/GuestBill').then((m) => ({ default: m.GuestBill })));
 const PublicBooking = lazy(() => import('./pages/guest/PublicBooking').then((m) => ({ default: m.PublicBooking })));
 
+const AppLanding = lazy(() => import('./pages/app/AppLanding').then((m) => ({ default: m.AppLanding })));
+const CustomerApp = lazy(() => import('./pages/app/CustomerApp').then((m) => ({ default: m.CustomerApp })));
+const AppTrack = lazy(() => import('./pages/app/AppTrack').then((m) => ({ default: m.AppTrack })));
+const MockCheckout = lazy(() => import('./pages/app/MockCheckout').then((m) => ({ default: m.MockCheckout })));
+
 export function App() {
   return (
     <Suspense fallback={<div className="grid min-h-screen place-items-center bg-ink-50"><Spinner label="Loading…" /></div>}>
@@ -75,6 +80,10 @@ export function App() {
         </Route>
 
         {/* Guest flows — no auth */}
+        <Route path="/eat" element={<AppLanding />} />
+        <Route path="/eat/:slug" element={<CustomerApp />} />
+        <Route path="/track/:token" element={<AppTrack />} />
+        <Route path="/pay/mock" element={<MockCheckout />} />
         <Route path="/t/:tableToken" element={<GuestMenu />} />
         <Route path="/s/:publicToken" element={<GuestSession />} />
         <Route path="/bill/:billToken" element={<GuestBill />} />

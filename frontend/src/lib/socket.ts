@@ -39,6 +39,15 @@ export function leaveSession(token: string) {
   socket?.emit('leave:session', { token });
 }
 
+/** An app guest follows one ticket, not a table. */
+export function joinOrder(token: string) {
+  socket?.emit('join:order', { token });
+}
+
+export function leaveOrder(token: string) {
+  socket?.emit('leave:order', { token });
+}
+
 export function useRealtimeConnected(): boolean {
   const [connected, setConnected] = useState(socket?.connected ?? false);
   useEffect(() => {

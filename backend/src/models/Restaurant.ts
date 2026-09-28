@@ -38,6 +38,7 @@ const restaurantSchema = new Schema(
       bookingDurationMinutes: { type: Number, default: 90 },
       bookingReminderMinutes: { type: Number, default: 60 },
       allowWaiterCash: { type: Boolean, default: true },
+      deliveryEnabled: { type: Boolean, default: true },
     },
   },
   { timestamps: true },

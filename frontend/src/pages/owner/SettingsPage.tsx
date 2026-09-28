@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Clock, ImageUp, Loader2, MapPin, Save, ShieldCheck } from 'lucide-react';
-import { http, errMsg, mediaUrl } from '../../lib/api';
+import { Clock, Link2, Printer, Save, ShieldCheck } from 'lucide-react';
+import { http, errMsg } from '../../lib/api';
+import { useQuery } from '../../lib/query';
 import { useAuth } from '../../store/auth';
 import type { Restaurant } from '../../lib/types';
 import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from '../../components/ui';
+import { ImagePicker } from '../../components/ImagePicker';
 import { toast } from '../../store/toasts';
 
 export function SettingsPage() {
@@ -25,7 +27,7 @@ export function SettingsPage() {
 
   const s = data.settings ?? {
     acceptingOrders: true, autoAcceptOrders: false, billFooterNote: '', bookingEnabled: true,
-    bookingSlotMinutes: 30, bookingDurationMinutes: 90, bookingReminderMinutes: 60, allowWaiterCash: false,
+    bookingSlotMinutes: 30, bookingDurationMinutes: 90, bookingReminderMinutes: 60, allowWaiterCash: false, deliveryEnabled: true,
   };
 
   function set<K extends keyof Restaurant>(key: K, value: Restaurant[K]) {
@@ -146,6 +148,11 @@ export function SettingsPage() {
               body="Allows the floor app to settle small bills without the counter."
               control={<Toggle checked={s.allowWaiterCash} onChange={(v) => setSetting('allowWaiterCash', v)} />}
             />
+            <SettingRow
+              title="Home delivery in the guest app"
+              body={`Turns the delivery card on at /eat/${data.slug}. Pickup at the counter always stays available.`}
+              control={<Toggle checked={!!s.deliveryEnabled} onChange={(v) => setSetting('deliveryEnabled', v)} />}
+            />
           </div>
         </Card>
 
@@ -166,10 +173,12 @@ export function SettingsPage() {
 
         <Card title="Branding" subtitle="Logo and cover image for guest screens" className="lg:col-span-2">
           <div className="grid gap-3.5 p-4 sm:grid-cols-2">
-            <ImageField label="Logo" value={data.branding?.logoUrl ?? ''} onChange={(v) => setBranding('logoUrl', v)} />
-            <ImageField label="Cover" value={data.branding?.coverUrl ?? ''} onChange={(v) => setBranding('coverUrl', v)} />
+            <ImagePicker label="Logo" value={data.branding?.logoUrl ?? ''} onChange={(v) => setBranding('logoUrl', v)} />
+            <ImagePicker label="Cover" value={data.branding?.coverUrl ?? ''} onChange={(v) => setBranding('coverUrl', v)} />
           </div>
         </Card>
+
+        <AppQrCard name={data.name} />
       </div>
 
       <div className="sticky bottom-4 flex flex-wrap items-center gap-3 rounded-2xl bg-ink-900 px-4 py-3 text-white shadow-xl">
@@ -186,6 +195,56 @@ export function SettingsPage() {
 
       <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </div>
+  );
+}
+
+/**
+ * The one code that covers every guest who is not sitting at a table: the counter
+ * sticker, the takeaway bag and the delivery box all point at the same ordering app.
+ */
+function AppQrCard({ name }: { name: string }) {
+  const { data, loading } = useQuery<{ url: string; dataUrl: string }>('restaurants:app-qr', '/restaurants/app-qr');
+
+  function print() {
+    if (!data) return;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(
+      `<div style="text-align:center;font-family:system-ui,sans-serif;padding:32px">` +
+        `<p style="margin:0;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#78716c">Order from</p>` +
+        `<h2 style="margin:4px 0 18px;font-size:26px">${name}</h2>` +
+        `<img src="${data.dataUrl}" style="width:260px" onload="window.print()" />` +
+        `<p style="margin:16px 0 0;font-size:15px;font-weight:600">Scan to open the menu</p>` +
+        `<p style="margin:4px 0 0;font-size:12.5px;color:#78716c">It installs as an app — pickup, home delivery and your live order status.</p>` +
+        `</div>`,
+    );
+    w.document.close();
+  }
+
+  return (
+    <Card title="The ordering app" subtitle="Same menu as the table QR, without a table" className="lg:col-span-2">
+      <div className="flex flex-col items-center gap-5 p-4 sm:flex-row">
+        <span className="grid h-44 w-44 shrink-0 place-items-center overflow-hidden rounded-2xl bg-ink-50 ring-1 ring-ink-200">
+          {data ? <img src={data.dataUrl} alt={`Ordering QR for ${name}`} className="h-full w-full object-contain p-1.5" /> : <span className={`text-[12px] text-ink-400 ${loading ? 'animate-pulse' : ''}`}>{loading ? 'Rendering…' : 'Unavailable'}</span>}
+        </span>
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <p className="text-[13px] leading-relaxed text-ink-600">
+            Print this and put it on the counter, the takeaway bag and the delivery box. A guest who scans it opens the
+            menu straight away, and the browser offers <strong className="font-semibold text-ink-900">Install app</strong> —
+            it then lives beside their other apps with their address already saved.
+          </p>
+          {data && (
+            <p className="break-all rounded-lg bg-ink-50 px-3 py-2 font-mono text-[12px] text-ink-500 ring-1 ring-ink-200">{data.url}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="secondary" icon={<Link2 size={13} />} disabled={!data} onClick={() => { void navigator.clipboard?.writeText(data?.url ?? ''); toast('Ordering link copied', 'success'); }}>
+              Copy link
+            </Button>
+            <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!data} onClick={print}>Print sticker</Button>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -206,38 +265,6 @@ function SettingRow({ title, body, control }: { title: string; body: string; con
       </div>
       {control}
     </div>
-  );
-}
-
-function ImageField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const [uploading, setUploading] = useState(false);
-  async function pick(file: File | undefined) {
-    if (!file) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const { data } = await http.post<{ url: string }>('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } });
-      onChange(data.url);
-      toast(`${label} uploaded`, 'success');
-    } catch (e) { toast(errMsg(e, 'Upload failed'), 'error'); } finally { setUploading(false); }
-  }
-  return (
-    <Field label={label}>
-      <div className="flex items-center gap-3">
-        <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-ink-100 text-ink-400">
-          {value ? <img src={mediaUrl(value)} alt="" className="h-full w-full object-cover" /> : <ImageUp size={17} />}
-        </span>
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder="/uploads/… or https://" className="text-[12.5px]" />
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[12px] font-semibold text-ember-600">
-            {uploading ? <Loader2 size={12} className="animate-spin" /> : <ImageUp size={12} />}
-            Upload a file
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
-          </label>
-        </div>
-      </div>
-    </Field>
   );
 }
 

@@ -8,7 +8,10 @@ export type OrderSource =
   | 'ZOMATO'
   | 'WEBSITE'
   | 'PHONE'
-  | 'OTHER';
+  | 'OTHER'
+  | 'CUSTOMER_APP';
+export type Fulfilment = 'DINE_IN' | 'PICKUP' | 'DELIVERY';
+export type OrderPaymentMode = '' | 'UPI' | 'CARD' | 'CASH_ON_DELIVERY';
 export type TableStatus =
   | 'AVAILABLE'
   | 'RESERVED'
@@ -56,6 +59,7 @@ export interface RestaurantSettings {
   bookingDurationMinutes: number;
   bookingReminderMinutes: number;
   allowWaiterCash: boolean;
+  deliveryEnabled: boolean;
 }
 
 export interface Restaurant {
@@ -117,6 +121,8 @@ export interface OrderItem {
   taxPercent: number;
   station: Station;
   isVeg?: boolean;
+  /** Joined from the live menu on read — the owner can upload a photo after the ticket exists. */
+  imageUrl?: string;
   addons: OrderAddon[];
   notes: string;
   lineTotal: number;
@@ -133,6 +139,9 @@ export interface Order {
   restaurantId: string;
   orderNumber: string;
   source: OrderSource;
+  fulfilment?: Fulfilment;
+  paymentMode?: OrderPaymentMode;
+  riderName?: string;
   tableId: string | null;
   /** Carried on kitchen tickets so the pass calls the right table, not just an order code. */
   tableNumber?: string;
@@ -459,38 +468,107 @@ export interface DeliveryAdapter {
   docsHint: string;
 }
 
+export interface PublicRestaurantBlock {
+  _id: string;
+  name: string;
+  slug: string;
+  phone: string;
+  address: Address;
+  currency: string;
+  hours: { open: string; close: string };
+  branding: { logoUrl?: string; coverUrl?: string; tagline?: string };
+  acceptingOrders: boolean;
+  bookingEnabled: boolean;
+  taxPercent: number;
+  serviceChargePercent: number;
+}
+
+export interface PublicMenuItem {
+  _id: string;
+  categoryId: string;
+  name: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  isVeg: boolean;
+  taxPercent: number | null;
+  prepMinutes: number;
+  tags: string[];
+  addonIds: string[];
+}
+
+export interface PublicAddon {
+  _id: string;
+  name: string;
+  price: number;
+}
+
 export interface GuestMenu {
-  restaurant: {
-    _id: string;
-    name: string;
-    slug: string;
-    phone: string;
-    address: Address;
-    currency: string;
-    hours: { open: string; close: string };
-    branding: { logoUrl?: string; coverUrl?: string; tagline?: string };
-    acceptingOrders: boolean;
-    bookingEnabled: boolean;
-    taxPercent: number;
-    serviceChargePercent: number;
-  };
+  restaurant: PublicRestaurantBlock;
   table: { _id: string; number: string; section: string; status: TableStatus };
   categories: { _id: string; name: string; description: string }[];
-  products: {
-    _id: string;
-    categoryId: string;
-    name: string;
-    description: string;
-    price: number;
-    imageUrl: string;
-    isVeg: boolean;
-    taxPercent: number | null;
-    prepMinutes: number;
-    tags: string[];
-    addonIds: string[];
-  }[];
-  addons: { _id: string; name: string; price: number }[];
+  products: PublicMenuItem[];
+  addons: PublicAddon[];
   session: { publicToken: string; status: SessionStatus; guestCount: number; customerName: string } | null;
+}
+
+/** The same menu served to the installed app, before any table exists. */
+export interface AppMenu {
+  restaurant: PublicRestaurantBlock & { deliveryEnabled: boolean };
+  categories: { _id: string; name: string; description: string }[];
+  products: PublicMenuItem[];
+  addons: PublicAddon[];
+}
+
+/** Everything the guest's tracking screen is allowed to know about its own order. */
+export interface AppTicket {
+  orderNumber: string;
+  status: OrderStatus;
+  fulfilment: Fulfilment;
+  paymentMode: OrderPaymentMode;
+  paymentStatus: 'UNPAID' | 'PAID' | 'REFUNDED';
+  riderName: string;
+  customerName: string;
+  customerAddress: string;
+  customerCity: string;
+  items: OrderItem[];
+  subtotal: number;
+  taxTotal: number;
+  serviceCharge: number;
+  grandTotal: number;
+  placedAt: string;
+  acceptedAt: string | null;
+  readyAt: string | null;
+  servedAt: string | null;
+  completedAt: string | null;
+  statusHistory: OrderEvent[];
+  bill: { publicToken: string; billNumber: string; grandTotal: number } | null;
+  restaurant: { name: string; currency: string } | null;
+}
+
+/** One kitchen the installed app can open. */
+export interface AppRestaurant {
+  name: string;
+  slug: string;
+  city: string;
+  line1: string;
+  tagline: string;
+  logoUrl: string;
+  currency: string;
+  acceptingOrders: boolean;
+}
+
+export interface AppOrderResult {
+  order: {
+    _id: string;
+    orderNumber: string;
+    status: OrderStatus;
+    fulfilment: Fulfilment;
+    paymentMode: OrderPaymentMode;
+    grandTotal: number;
+    trackingToken: string;
+  };
+  bill: { billNumber: string; grandTotal: number; publicToken: string } | null;
 }
 
 export interface GuestSession {

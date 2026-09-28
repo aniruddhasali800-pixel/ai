@@ -1,5 +1,11 @@
 import { Schema, model, type InferSchemaType } from 'mongoose';
-import { ORDER_SOURCES, ORDER_STATUSES, STATIONS } from '../types/constants';
+import {
+  ORDER_FULFILMENT,
+  ORDER_PAYMENT_MODES,
+  ORDER_SOURCES,
+  ORDER_STATUSES,
+  STATIONS,
+} from '../types/constants';
 
 const orderItemSchema = new Schema(
   {
@@ -29,6 +35,13 @@ const orderSchema = new Schema(
     restaurantId: { type: Schema.Types.ObjectId, ref: 'Restaurant', required: true, index: true },
     orderNumber: { type: String, required: true },
     source: { type: String, enum: ORDER_SOURCES, required: true },
+    /** How the food reaches the guest — the same ticket says "served" or "handed to the rider". */
+    fulfilment: { type: String, enum: ORDER_FULFILMENT, default: 'DINE_IN' },
+    /** What the guest picked in the app. It is an intention, never a settled payment. */
+    paymentMode: { type: String, enum: [...ORDER_PAYMENT_MODES, ''], default: '' },
+    /** The guest's own tracking link for app orders; nothing else about the order is public. */
+    trackingToken: { type: String, trim: true },
+    riderName: { type: String, trim: true, default: '' },
     tableId: { type: Schema.Types.ObjectId, ref: 'Table', default: null },
     tableSessionId: { type: Schema.Types.ObjectId, ref: 'TableSession', default: null },
     waiterId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
@@ -70,6 +83,7 @@ const orderSchema = new Schema(
 );
 
 orderSchema.index({ restaurantId: 1, orderNumber: 1 }, { unique: true });
+orderSchema.index({ trackingToken: 1 }, { unique: true, sparse: true });
 orderSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
 orderSchema.index({ restaurantId: 1, tableSessionId: 1 });
 orderSchema.index(

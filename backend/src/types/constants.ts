@@ -21,10 +21,20 @@ export const ORDER_SOURCES = [
   'WEBSITE',
   'PHONE',
   'OTHER',
+  // The guest's own installed app: pickup at the counter or delivery to their door.
+  'CUSTOMER_APP',
 ] as const;
 export type OrderSource = (typeof ORDER_SOURCES)[number];
 
 export const DELIVERY_SOURCES: OrderSource[] = ['SWIGGY', 'ZOMATO', 'WEBSITE'];
+
+/** How the food reaches the guest, which is what the status copy has to talk about. */
+export const ORDER_FULFILMENT = ['DINE_IN', 'PICKUP', 'DELIVERY'] as const;
+export type Fulfilment = (typeof ORDER_FULFILMENT)[number];
+
+/** What the guest chose to pay with. Settling the money is still a staff action. */
+export const ORDER_PAYMENT_MODES = ['UPI', 'CARD', 'CASH_ON_DELIVERY'] as const;
+export type OrderPaymentMode = (typeof ORDER_PAYMENT_MODES)[number];
 
 export const TABLE_STATUSES = [
   'AVAILABLE',

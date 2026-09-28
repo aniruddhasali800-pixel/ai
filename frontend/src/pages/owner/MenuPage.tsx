@@ -4,6 +4,7 @@ import { useQuery, invalidate, patch } from '../../lib/query';
 import { http, errMsg, mediaUrl } from '../../lib/api';
 import type { Addon, Category, MenuBundle, Product, Station } from '../../lib/types';
 import { Button, Card, EmptyState, Field, Input, Modal, Pill, Select, Textarea, Toggle, VegDot } from '../../components/ui';
+import { ImagePicker } from '../../components/ImagePicker';
 import { inr } from '../../lib/format';
 import { stationLabel } from '../../lib/statusMaps';
 import { can } from '../../store/auth';
@@ -224,7 +225,7 @@ function ProductModal({ product, categories, addons, onClose }: { product: Produ
         <Field label="Station"><Select value={form.station} onChange={(e) => set('station', e.target.value)}>{STATION_LIST.map((s) => <option key={s} value={s}>{stationLabel(s)}</option>)}</Select></Field>
         <Field label="Prep time (min)"><Input type="number" min={1} max={180} value={form.prepMinutes} onChange={(e) => set('prepMinutes', e.target.value)} /></Field>
         <Field label="GST % (blank = default)"><Input type="number" min={0} max={28} value={form.taxPercent ?? ''} onChange={(e) => set('taxPercent', e.target.value === '' ? null : Number(e.target.value))} /></Field>
-        <Field label="Image URL"><Input value={form.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} placeholder="/uploads/..." /></Field>
+        <ImagePicker label="Dish photo" value={form.imageUrl} onChange={(v) => set('imageUrl', v)} className="sm:col-span-2" />
         <Field label="Description" className="sm:col-span-2"><Textarea value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
         <Field label="Tags (comma separated)" className="sm:col-span-2"><Input value={form.tags} onChange={(e) => set('tags', e.target.value)} placeholder="signature, spicy" /></Field>
         <Field label="Add-ons" className="sm:col-span-2">

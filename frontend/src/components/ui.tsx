@@ -476,6 +476,37 @@ export function VegDot({ isVeg }: { isVeg: boolean }) {
   );
 }
 
+/**
+ * A dish with a photo shows it. A dish without one still has to look like part of a
+ * menu, so the tile carries the veg colour and the first letter.
+ */
+export function DishThumb({
+  name,
+  src,
+  isVeg,
+  size = 74,
+}: {
+  name: string;
+  src?: string;
+  isVeg: boolean;
+  size?: number;
+}) {
+  const box = { width: size, height: size };
+  if (src) {
+    return <img src={src} alt="" style={box} className="shrink-0 rounded-xl object-cover ring-1 ring-ink-200" />;
+  }
+  return (
+    <span
+      style={box}
+      className={`grid shrink-0 place-items-center rounded-xl font-display font-800 uppercase ${
+        isVeg ? 'bg-leaf-100 text-leaf-700' : 'bg-red-50 text-red-700'
+      }`}
+    >
+      <span style={{ fontSize: Math.round(size * 0.29) }}>{name.slice(0, 1)}</span>
+    </span>
+  );
+}
+
 export function Tabs<T extends string>({
   tabs,
   active,

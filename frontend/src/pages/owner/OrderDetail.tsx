@@ -1,10 +1,17 @@
 import { useState } from 'react';
-import { Ban, CheckCheck, Phone, Printer, Receipt } from 'lucide-react';
-import { Drawer, Button, Pill, StatusDot } from '../../components/ui';
+import { Banknote, Ban, CheckCheck, Package, Phone, Printer, Receipt, Truck, User } from 'lucide-react';
+import { DishThumb, Drawer, Button, Pill, StatusDot, VegDot } from '../../components/ui';
 import { useQuery, invalidate } from '../../lib/query';
-import { http, errMsg } from '../../lib/api';
+import { http, errMsg, mediaUrl } from '../../lib/api';
 import type { Order } from '../../lib/types';
-import { ORDER_STATUS_META, SOURCE_META, NEXT_ORDER_STATUS, stationLabel } from '../../lib/statusMaps';
+import {
+  ORDER_STATUS_META,
+  SOURCE_META,
+  NEXT_ORDER_STATUS,
+  FULFILMENT_LABEL,
+  PAYMENT_MODE_LABEL,
+  stationLabel,
+} from '../../lib/statusMaps';
 import { inr2, inr, clockTime, dateTime } from '../../lib/format';
 import { toast } from '../../store/toasts';
 
@@ -27,6 +34,26 @@ export function useOrderTicket(orderId: string) {
     }
   }
 
+  /**
+   * The moment a bag leaves the counter the guest's address stops being a promise,
+   * so the name of whoever carries it goes on the ticket with the handover.
+   */
+  async function handOver(next: Order['status'], question = 'Who is taking this bag?') {
+    if (!order) return;
+    const rider = window.prompt(question, order.riderName || '')?.trim();
+    if (!rider) return;
+    setBusy(next);
+    try {
+      await http.patch(`/orders/${order._id}/status`, { status: next, riderName: rider });
+      invalidate('orders');
+      toast(`${order.orderNumber} handed to ${rider}`, 'success');
+    } catch (e) {
+      toast(errMsg(e, 'Could not update ticket'), 'error');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function issueBill() {
     if (!order) return;
     setBusy('BILL');
@@ -42,7 +69,7 @@ export function useOrderTicket(orderId: string) {
     }
   }
 
-  return { order, loading, busy, setStatus, issueBill };
+  return { order, loading, busy, setStatus, handOver, issueBill };
 }
 
 export type OrderTicket = ReturnType<typeof useOrderTicket>;
@@ -69,15 +96,44 @@ export function TicketHeading({ order }: { order: Order }) {
 
 export function TicketSections({ order }: { order: Order }) {
   const deliverTo = [order.customerAddress, order.customerCity].filter(Boolean).join(', ');
+  const channel = order.fulfilment && order.fulfilment !== 'DINE_IN' ? FULFILMENT_LABEL[order.fulfilment] : '';
+  const howPaying = order.paymentMode ? PAYMENT_MODE_LABEL[order.paymentMode] : '';
 
   return (
     <div className="space-y-5">
+      {(channel || howPaying) && (
+        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+          {channel && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-ink-900 px-2.5 py-1 font-semibold text-white">
+              {order.fulfilment === 'DELIVERY' ? <Truck size={12} /> : <Package size={12} />} {channel}
+            </span>
+          )}
+          {howPaying && (
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 font-semibold ring-1 ${
+                order.paymentMode === 'CASH_ON_DELIVERY' ? 'bg-amber-50 text-amber-800 ring-amber-200' : 'bg-leaf-50 text-leaf-700 ring-leaf-500/30'
+              }`}
+            >
+              <Banknote size={12} /> {howPaying}
+            </span>
+          )}
+          {order.riderName && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 font-semibold text-blue-800 ring-1 ring-blue-200">
+              <User size={12} /> {order.riderName}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="card divide-y divide-ink-100">
         {order.items.map((it, i) => (
           <div key={i} className="flex items-start gap-3 px-3.5 py-2.5">
-            <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-ember-50 text-[12px] font-bold text-ember-700">{it.qty}</span>
+            <DishThumb name={it.name} src={it.imageUrl ? mediaUrl(it.imageUrl) : undefined} isVeg={it.isVeg ?? true} size={46} />
             <span className="min-w-0 flex-1">
-              <span className="block text-[14px] font-semibold text-ink-900">{it.name}</span>
+              <span className="flex items-center gap-2">
+                <VegDot isVeg={it.isVeg ?? true} />
+                <span className="text-[14px] font-semibold text-ink-900">{it.qty} × {it.name}</span>
+              </span>
               <span className="text-[11.5px] text-ink-500">{stationLabel(it.station)} · {inr(it.price)} ea</span>
               {it.addons?.length > 0 && <span className="block text-[12px] text-ink-500">+ {it.addons.map((a) => `${a.name} ${inr(a.price)}`).join(', ')}</span>}
               {it.notes && <span className="mt-1 block rounded bg-amber-50 px-2 py-1 text-[12px] text-amber-800 ring-1 ring-amber-200">{it.notes}</span>}
@@ -133,24 +189,31 @@ export function TicketSections({ order }: { order: Order }) {
 }
 
 export function TicketActions({ ticket, onBilled }: { ticket: OrderTicket; onBilled?: () => void }) {
-  const { order, busy, setStatus, issueBill } = ticket;
+  const { order, busy, setStatus, handOver, issueBill } = ticket;
   if (!order) return null;
   const nexts = NEXT_ORDER_STATUS[order.status];
+  const leaving = order.fulfilment === 'DELIVERY' || order.fulfilment === 'PICKUP';
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {nexts.map((n) => (
-        <Button
-          key={n}
-          variant={n === 'CANCELLED' ? 'danger' : n === 'SERVED' || n === 'COMPLETED' ? 'success' : 'primary'}
-          size="sm"
-          loading={busy === n}
-          icon={n === 'CANCELLED' ? <Ban size={13} /> : <CheckCheck size={13} />}
-          onClick={() => setStatus(n, n === 'CANCELLED' ? window.prompt('Reason for cancelling?') || 'Cancelled by staff' : undefined)}
-        >
-          {ORDER_STATUS_META[n].label}
-        </Button>
-      ))}
+      {nexts.map((n) => {
+        const pass = n === 'SERVED' && leaving;
+        return (
+          <Button
+            key={n}
+            variant={n === 'CANCELLED' ? 'danger' : n === 'SERVED' || n === 'COMPLETED' ? 'success' : 'primary'}
+            size="sm"
+            loading={busy === n}
+            icon={n === 'CANCELLED' ? <Ban size={13} /> : pass ? <Truck size={13} /> : <CheckCheck size={13} />}
+            onClick={() => {
+              if (pass) return void handOver(n, order.fulfilment === 'DELIVERY' ? 'Which rider is taking this bag?' : 'Who collected it?');
+              setStatus(n, n === 'CANCELLED' ? window.prompt('Reason for cancelling?') || 'Cancelled by staff' : undefined);
+            }}
+          >
+            {pass ? (order.fulfilment === 'DELIVERY' ? 'Hand to rider' : 'Hand over') : ORDER_STATUS_META[n].label}
+          </Button>
+        );
+      })}
       {order.paymentStatus === 'UNPAID' && order.status !== 'CANCELLED' && (
         <Button variant="secondary" size="sm" icon={<Receipt size={13} />} loading={busy === 'BILL'} onClick={() => void issueBill().then(onBilled)}>
           Issue bill

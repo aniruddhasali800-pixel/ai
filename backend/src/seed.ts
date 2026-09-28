@@ -75,6 +75,7 @@ const SOURCE_PREFIX: Record<OrderSource, string> = {
   WEBSITE: 'W',
   PHONE: 'P',
   OTHER: 'O',
+  CUSTOMER_APP: 'A',
 };
 
 const ADDRESS_LINES = [
@@ -165,6 +166,7 @@ export async function seedDemoData(fresh = false): Promise<void> {
       bookingDurationMinutes: 90,
       bookingReminderMinutes: 60,
       allowWaiterCash: true,
+      deliveryEnabled: true,
     },
   });
   const rid = String(restaurant._id);

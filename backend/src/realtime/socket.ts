@@ -2,7 +2,7 @@ import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env, allowedOrigins } from '../config/env';
-import { TableSessionModel } from '../models';
+import { OrderModel, TableSessionModel } from '../models';
 import type { AccessPayload } from '../middleware/auth';
 
 let io: Server | null = null;
@@ -14,6 +14,7 @@ export const roomNames = {
   waiter: (userId: string) => `waiter:${userId}`,
   user: (userId: string) => `user:${userId}`,
   session: (token: string) => `session:${token}`,
+  order: (token: string) => `order:${token}`,
 };
 
 export function getIO(): Server {
@@ -73,6 +74,26 @@ export function initSocket(server: HttpServer): Server {
 
     socket.on('leave:session', (payload: { token?: string }) => {
       if (typeof payload?.token === 'string') socket.leave(roomNames.session(payload.token));
+    });
+
+    // An app customer follows one order — the tracking token is the only proof they get.
+    socket.on('join:order', async (payload: { token?: string }, ack?: (res: { ok: boolean }) => void) => {
+      const token = typeof payload?.token === 'string' ? payload.token : '';
+      if (!token || token.length < 8) {
+        ack?.({ ok: false });
+        return;
+      }
+      const order = await OrderModel.findOne({ trackingToken: token }).select('_id').lean();
+      if (!order) {
+        ack?.({ ok: false });
+        return;
+      }
+      socket.join(roomNames.order(token));
+      ack?.({ ok: true });
+    });
+
+    socket.on('leave:order', (payload: { token?: string }) => {
+      if (typeof payload?.token === 'string') socket.leave(roomNames.order(payload.token));
     });
   });
 

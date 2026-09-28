@@ -105,7 +105,11 @@ ordersRouter.patch(
   requirePermission('orders:status'),
   validate({
     params: z.object({ id: z.string() }),
-    body: z.object({ status: z.enum(ORDER_STATUSES), reason: z.string().max(200).optional() }),
+    body: z.object({
+      status: z.enum(ORDER_STATUSES),
+      reason: z.string().max(200).optional(),
+      riderName: z.string().max(60).optional(),
+    }),
   }),
   asyncHandler(async (req, res) => {
     const auth = req.auth!;
@@ -114,7 +118,7 @@ ordersRouter.patch(
       req.params.id,
       req.body.status,
       { userId: auth.userId, role: auth.role, name: auth.name },
-      { reason: req.body.reason },
+      { reason: req.body.reason, riderName: req.body.riderName },
     );
     if (['ACCEPTED', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED'].includes(req.body.status)) {
       void pushOrderStatus({
