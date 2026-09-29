@@ -3,10 +3,9 @@ import { CameraOff, Keyboard, ScanLine, X } from 'lucide-react';
 import { startQrCamera } from '../lib/scan';
 
 /**
- * The shared "hold up your phone" control. It shows the camera wherever the browser can
- * actually decode a QR, and a text box everywhere else — a laptop with no webcam, or a
- * phone whose owner denied the camera, still gets to the same place by typing what is
- * printed under the sticker.
+ * The shared "hold up your phone" control. The camera opens first because the decoder
+ * ships with the app, not with the browser; the text box is the escape for a device with
+ * no lens at all, or one whose owner denied the camera.
  */
 export function QrScanner({
   onCode,

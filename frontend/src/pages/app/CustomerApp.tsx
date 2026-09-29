@@ -16,7 +16,6 @@ import {
   Smartphone,
   Store,
   Truck,
-  UtensilsCrossed,
 } from 'lucide-react';
 import { useQuery, invalidate } from '../../lib/query';
 import { http, errMsg, mediaUrl } from '../../lib/api';
@@ -28,7 +27,7 @@ import { toast } from '../../store/toasts';
 import { useTitle } from '../../hooks/useTitle';
 import { useInstallPrompt } from '../../hooks/useInstallPrompt';
 
-type Mode = 'PICKUP' | 'DELIVERY' | 'DINE_IN';
+type Mode = 'DELIVERY' | 'DINE_IN';
 type Stage = 'home' | 'seat' | 'menu' | 'checkout';
 type PayMode = 'UPI' | 'CARD' | 'CASH_ON_DELIVERY';
 
@@ -84,7 +83,7 @@ export function CustomerApp() {
   const navigate = useNavigate();
   const { data, loading, error } = useQuery<AppMenu>(`app:menu:${slug}`, `/public/apps/menu/${slug}`);
   const [stage, setStage] = useState<Stage>('home');
-  const [mode, setMode] = useState<Mode>('PICKUP');
+  const [mode, setMode] = useState<Mode>('DELIVERY');
   const [cart, setCart] = useState<Record<string, Line>>({});
   const [seat, setSeat] = useState<Seat | null>(() => savedSeat(slug));
   const { canInstall, promptInstall, installed, needsManualInstall } = useInstallPrompt();
@@ -193,7 +192,7 @@ export function CustomerApp() {
             </span>
             <div className="min-w-0 flex-1 leading-tight">
               <p className="text-[13px] font-semibold text-ink-900">
-                {count} item{count > 1 ? 's' : ''} · {mode === 'DELIVERY' ? 'to your door' : mode === 'DINE_IN' ? `to Table ${seat?.number ?? ''}` : 'to collect'}
+                {count} item{count > 1 ? 's' : ''} · {mode === 'DELIVERY' ? 'to your door' : `to Table ${seat?.number ?? ''}`}
               </p>
               <p className="text-[12px] text-ink-500">{inr(subtotal)} before taxes</p>
             </div>
@@ -223,6 +222,11 @@ function HomePicker({
 }) {
   return (
     <div className="space-y-3">
+      {r.hours && (
+        <p className="flex items-center justify-center gap-1.5 pt-1 text-[12px] font-semibold text-ink-500">
+          <Clock size={12} /> Open {r.hours.open}–{r.hours.close}
+        </p>
+      )}
       {seated && onReturnToTable && (
         <button
           onClick={onReturnToTable}
@@ -239,13 +243,6 @@ function HomePicker({
         </button>
       )}
       <ModeCard
-        icon={<UtensilsCrossed size={20} />}
-        title="Order the food"
-        body={`Cooked when you tap, ready to collect at ${r.address?.line1 || 'the counter'}. No table needed.`}
-        eta={r.hours ? `Open ${r.hours.open}–${r.hours.close}` : undefined}
-        onClick={() => onPick('PICKUP')}
-      />
-      <ModeCard
         icon={<Truck size={20} />}
         title="Home delivery"
         body="Type the address once — we keep it for next time and ride to your door."
@@ -254,8 +251,8 @@ function HomePicker({
       />
       <ModeCard
         icon={<Armchair size={20} />}
-        title="Eat in at the restaurant"
-        body="Scan the sticker on your table, or choose a free seat from the floor. The kitchen sees it at once."
+        title="Choose your seat"
+        body="Point the camera at the sticker on your table, or tap a free seat from the floor. The kitchen sees it at once."
         onClick={() => onPick('DINE_IN')}
       />
       <p className="pt-1 text-center text-[11.5px] leading-relaxed text-ink-500">
@@ -272,14 +269,12 @@ function ModeCard({
   icon,
   title,
   body,
-  eta,
   disabled,
   onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   body: string;
-  eta?: string;
   disabled?: boolean;
   onClick: () => void;
 }) {
@@ -293,11 +288,6 @@ function ModeCard({
       <span className="min-w-0 flex-1">
         <span className="block font-display text-[17px] font-800 text-ink-900">{title}</span>
         <span className="mt-0.5 block text-[12.5px] leading-snug text-ink-500">{body}</span>
-        {eta && (
-          <span className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-ink-400">
-            <Clock size={11} /> {eta}
-          </span>
-        )}
       </span>
     </button>
   );
@@ -402,7 +392,7 @@ function SeatStage({ slug, onBack, onSeated }: { slug: string; onBack: () => voi
   return (
     <div className="space-y-3">
       <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-500 hover:text-ink-900">
-        <ArrowLeft size={14} /> Eat in at the restaurant
+        <ArrowLeft size={14} /> Choose your seat
       </button>
 
       <div className="card space-y-3 p-4">
@@ -444,7 +434,7 @@ function SeatStage({ slug, onBack, onSeated }: { slug: string; onBack: () => voi
         {loading && !data && <p className="mt-3 text-[12.5px] text-ink-500">Checking the floor…</p>}
         {!!data && !data.seats.length && (
           <p className="mt-3 rounded-xl bg-ink-50 px-3 py-2.5 text-[12.5px] text-ink-600">
-            Every seat is taken at the moment. Order for pickup or delivery instead, or ask at the counter.
+            Every seat is taken at the moment. Send it home as a delivery instead, or ask at the counter.
           </p>
         )}
 
@@ -519,11 +509,11 @@ function MenuStage({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-500 hover:text-ink-900">
-          <ArrowLeft size={14} /> {mode === 'DELIVERY' ? 'Home delivery' : mode === 'DINE_IN' ? 'Eat in' : 'Order the food'}
+          <ArrowLeft size={14} /> {mode === 'DELIVERY' ? 'Home delivery' : 'Choose your seat'}
         </button>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11.5px] font-semibold text-ink-600 ring-1 ring-ink-200">
-          {mode === 'DELIVERY' ? <MapPin size={11} /> : mode === 'DINE_IN' ? <Armchair size={11} /> : <Store size={11} />}
-          {mode === 'DELIVERY' ? 'To your door' : mode === 'DINE_IN' ? `Table ${seat?.number ?? '—'}` : 'Collect at the counter'}
+          {mode === 'DELIVERY' ? <MapPin size={11} /> : <Armchair size={11} />}
+          {mode === 'DELIVERY' ? 'To your door' : `Table ${seat?.number ?? '—'}`}
         </span>
       </div>
 
@@ -671,7 +661,7 @@ function CheckoutStage({
     address: saved?.address ?? '',
     city: saved?.city ?? data.restaurant.address?.city ?? '',
     notes: '',
-    pay: (mode === 'DELIVERY' ? 'CASH_ON_DELIVERY' : 'UPI') as PayMode,
+    pay: 'CASH_ON_DELIVERY' as PayMode,
   });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -749,7 +739,7 @@ function CheckoutStage({
 
       <div className="card space-y-3 p-4">
         <h2 className="font-display text-[16px] font-800 text-ink-900">
-          {dineIn ? 'Who is at the table?' : mode === 'DELIVERY' ? 'Where is it going?' : 'Who is collecting?'}
+          {dineIn ? 'Who is at the table?' : 'Where is it going?'}
         </h2>
         <Field label="Your name">
           <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Anita Kulkarni" className={inputCls} />
@@ -783,7 +773,7 @@ function CheckoutStage({
         <div className="card p-4">
           <h2 className="font-display text-[16px] font-800 text-ink-900">Payment</h2>
           <p className="mt-0.5 text-[12px] text-ink-500">
-            Nothing is charged from this screen. {mode === 'DELIVERY' ? 'Cash is collected at the door.' : 'We hold the ticket until you pay.'}
+            Nothing is charged from this screen. Settle it by UPI or card below, or hand the cash to the rider.
           </p>
           <div className="mt-3 space-y-2">
             <PayOption
@@ -802,8 +792,8 @@ function CheckoutStage({
             />
             <PayOption
               icon={<Banknote size={16} />}
-              title={mode === 'DELIVERY' ? 'Cash on delivery' : 'Cash at the counter'}
-              body={mode === 'DELIVERY' ? 'Hand the money to the rider when the bag arrives.' : 'Pay when you collect.'}
+              title="Cash on delivery"
+              body="Hand the money to the rider when the bag arrives."
               active={form.pay === 'CASH_ON_DELIVERY'}
               onClick={() => set('pay', 'CASH_ON_DELIVERY')}
             />

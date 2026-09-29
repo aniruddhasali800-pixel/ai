@@ -1,32 +1,35 @@
 /**
- * The camera reading, kept apart from the UI so the scanner in the back office and the
- * one on a guest's table sticker share exactly the same behaviour.
+ * The guest's table sticker, read by this browser's own camera.
  *
- * Nothing here is downloaded: every browser we care about now ships a QR decoder, and a
- * desktop with no camera falls back to typing the code that is printed under the sticker.
+ * The decoder is bundled rather than borrowed: the platform's built-in barcode reader is
+ * missing from Chrome on Windows and from Firefox everywhere, so a waiter's tablet or a
+ * guest's laptop would otherwise be left typing codes by hand. jsQR only needs pixels,
+ * which every browser can give us from a <video> frame.
  */
-interface DetectedCode {
-  rawValue: string;
-  format: string;
-}
-
-interface BarcodeDetectorLike {
-  detect: (source: CanvasImageSource) => Promise<DetectedCode[]>;
-}
-
-type BarcodeDetectorCtor = new (options: { formats: string[] }) => BarcodeDetectorLike;
-
-function detectorCtor(): BarcodeDetectorCtor | null {
-  const host = window as unknown as { BarcodeDetector?: BarcodeDetectorCtor };
-  return host.BarcodeDetector ?? null;
-}
-
-/** True when this browser can genuinely point a camera at a code. */
-export function cameraScanningSupported(): boolean {
-  return typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && !!detectorCtor();
-}
+import jsQR from 'jsqr';
 
 export class CameraUnavailable extends Error {}
+
+// A QR on a laminated sticker fills a corner of the frame; 640px decodes it comfortably
+// and keeps one pass fast enough to run between animation ticks.
+const DECODE_WIDTH = 640;
+
+function drawFrame(video: HTMLVideoElement, canvas: HTMLCanvasElement): ImageData | null {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return null;
+  const scale = Math.min(1, DECODE_WIDTH / w);
+  const cw = Math.round(w * scale);
+  const ch = Math.round(h * scale);
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw;
+    canvas.height = ch;
+  }
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0, cw, ch);
+  return ctx.getImageData(0, 0, cw, ch);
+}
 
 /**
  * Opens the rear camera and calls onCode with the first QR it reads, then releases the
@@ -37,9 +40,9 @@ export async function startQrCamera(
   video: HTMLVideoElement,
   onCode: (code: string) => void,
 ): Promise<() => void> {
-  const Ctor = detectorCtor();
-  if (!Ctor) throw new CameraUnavailable('This browser cannot read codes from the camera');
-  if (!navigator.mediaDevices?.getUserMedia) throw new CameraUnavailable('No camera is reachable from this page');
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new CameraUnavailable('This page cannot reach a camera — type the code instead');
+  }
 
   let stream: MediaStream | null = null;
   try {
@@ -51,42 +54,52 @@ export async function startQrCamera(
     const name = (e as DOMException)?.name;
     if (name === 'NotAllowedError') throw new CameraUnavailable('Camera blocked — allow it in the browser, or type the code');
     if (name === 'NotFoundError') throw new CameraUnavailable('No camera found — type the code instead');
+    if (name === 'NotReadableError') throw new CameraUnavailable('The camera is busy in another app — close it and try again');
     throw new CameraUnavailable('The camera could not start — type the code instead');
   }
 
   video.srcObject = stream;
   video.setAttribute('playsinline', 'true');
   await video.play().catch(() => undefined);
+  if (!video.videoWidth) {
+    await new Promise<void>((resolve) => {
+      video.addEventListener('loadedmetadata', () => resolve(), { once: true });
+      window.setTimeout(resolve, 2500);
+    });
+  }
 
-  const detector = new Ctor({ formats: ['qr_code'] });
+  const canvas = document.createElement('canvas');
   let reading = true;
   let finished = false;
+  let timer = 0;
 
   const stop = () => {
     reading = false;
+    window.clearTimeout(timer);
     stream?.getTracks().forEach((track) => track.stop());
     video.srcObject = null;
   };
 
-  const readFrame = async () => {
-    if (!reading) return;
+  const readFrame = () => {
+    if (!reading || finished) return;
     try {
-      const found = await detector.detect(video);
-      if (found.length && !finished) {
-        finished = true;
-        stop();
-        onCode(found[0].rawValue);
-        return;
+      const pixels = drawFrame(video, canvas);
+      if (pixels) {
+        const found = jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: 'attemptBoth' });
+        if (found?.data) {
+          finished = true;
+          navigator.vibrate?.(35);
+          stop();
+          onCode(found.data);
+          return;
+        }
       }
     } catch {
-      // A blurry frame is normal; the next tick tries again.
+      // A blurry or mid-scroll frame is normal; the next tick tries again.
     }
-    if (reading) timer = window.setTimeout(readFrame, 260);
+    if (reading && !finished) timer = window.setTimeout(readFrame, 90);
   };
 
-  let timer = window.setTimeout(readFrame, 260);
-  return () => {
-    window.clearTimeout(timer);
-    stop();
-  };
+  timer = window.setTimeout(readFrame, 90);
+  return stop;
 }

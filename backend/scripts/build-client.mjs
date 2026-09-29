@@ -22,10 +22,10 @@ function run(...args) {
 if (!fs.existsSync(path.join(clientDir, 'package.json'))) {
   console.log('[client] no frontend workspace next to the API — skipping');
 } else {
-  if (!fs.existsSync(path.join(clientDir, 'node_modules'))) {
-    console.log('[client] installing dependencies');
-    run('npm', 'install', '--no-audit', '--no-fund');
-  }
+  // A cached node_modules can belong to an older dependency list, so npm reconciles it
+  // against package.json on every build rather than being skipped for existing.
+  console.log('[client] installing dependencies');
+  run('npm', 'install', '--no-audit', '--no-fund');
   run('npm', 'run', 'build');
   console.log(`[client] built into ${path.relative(process.cwd(), path.join(clientDir, 'dist'))}`);
 }
