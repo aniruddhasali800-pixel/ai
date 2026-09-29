@@ -1,0 +1,72 @@
+{
+  "id": "/manager.html",
+  "name": "Sizzle Manager — Restaurant OS",
+  "short_name": "Sizzle Manager",
+  "description": "The floor, the pass and the people: live orders, table map, menu, staff, stock and reports. Sign in with your manager account.",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "start_url": "/manager.html",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
+  "orientation": "any",
+  "background_color": "#1c1917",
+  "theme_color": "#1c1917",
+  "categories": ["business", "productivity", "food"],
+  "icons": [
+    {
+      "src": "/icons/manager.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/manager-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/manager-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/manager-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Orders",
+      "short_name": "Orders",
+      "description": "Every ticket the kitchen has fired",
+      "url": "/app/orders",
+      "icons": [{ "src": "/icons/manager-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Tables & QR",
+      "short_name": "Tables",
+      "description": "The floor map and every printed code",
+      "url": "/app/tables",
+      "icons": [{ "src": "/icons/manager-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Staff",
+      "short_name": "Staff",
+      "description": "Who is on shift and what they can open",
+      "url": "/app/staff",
+      "icons": [{ "src": "/icons/manager-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Kitchen",
+      "short_name": "Kitchen",
+      "description": "Watch the pass without leaving the floor",
+      "url": "/kds",
+      "icons": [{ "src": "/icons/manager-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

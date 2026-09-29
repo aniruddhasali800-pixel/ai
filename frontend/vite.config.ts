@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -16,5 +19,17 @@ export default defineConfig({
       '/socket.io': { target: 'http://localhost:4000', ws: true },
     },
   },
-  build: { outDir: 'dist', sourcemap: false },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    // Three entries, three installable apps: guests get /, the owner and the manager
+    // each get a page that carries its own manifest and icon.
+    rollupOptions: {
+      input: {
+        main: `${root}index.html`,
+        owner: `${root}owner.html`,
+        manager: `${root}manager.html`,
+      },
+    },
+  },
 });

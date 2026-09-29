@@ -10,6 +10,7 @@ import { Spinner } from './components/ui';
 const Hub = lazy(() => import('./pages/Hub').then((m) => ({ default: m.Hub })));
 const RegisterPage = lazy(() => import('./pages/Register').then((m) => ({ default: m.RegisterPage })));
 const NotFound = lazy(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })));
+const StaffInstall = lazy(() => import('./pages/StaffInstall').then((m) => ({ default: m.StaffInstall })));
 
 const DashboardPage = lazy(() => import('./pages/owner/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const OrdersPage = lazy(() => import('./pages/owner/OrdersPage').then((m) => ({ default: m.OrdersPage })));
@@ -47,6 +48,10 @@ export function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+
+        {/* Two installable staff apps, each with its own icon, name and manifest */}
+        <Route path="/owner.html" element={<StaffInstall role="OWNER" />} />
+        <Route path="/manager.html" element={<StaffInstall role="MANAGER" />} />
 
         {/* Back office — owner & manager */}
         <Route path="/app" element={<StaffLayout />}>

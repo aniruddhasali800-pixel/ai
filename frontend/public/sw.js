@@ -1,13 +1,21 @@
 // Hand-rolled service worker: no Workbox, no build plugin, one versioned cache.
-const CACHE = 'sizzle-v1';
+const CACHE = 'sizzle-v2';
 const SHELL = [
   '/',
   '/eat',
+  '/owner.html',
+  '/manager.html',
   '/manifest.webmanifest',
+  '/manifest-owner.webmanifest',
+  '/manifest-manager.webmanifest',
   '/icons/favicon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/maskable-512.png',
+  '/icons/manager.svg',
+  '/icons/manager-192.png',
+  '/icons/manager-512.png',
+  '/icons/manager-maskable-512.png',
 ];
 
 // The shell is precached so an installed app (or a scanned table QR) opens with no signal.
@@ -42,8 +50,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   // Navigations are network-first so guests always see today's menu, prices and offers.
+  // Offline, the exact page wins over the shell: the staff installs must not fall back
+  // to the guest app's document, which carries a different manifest.
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.match('/')));
+    event.respondWith(
+      fetch(request).catch(() => caches.match(request).then((hit) => hit || caches.match('/'))),
+    );
     return;
   }
   // Icons, fonts and hashed assets are cache-first: Vite fingerprints them per build.

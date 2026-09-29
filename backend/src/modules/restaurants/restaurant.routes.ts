@@ -37,6 +37,24 @@ restaurantRouter.get(
   }),
 );
 
+/**
+ * The two codes that put the restaurant on a staff phone. Each one installs its own app —
+ * different name, different icon — and both open the same five dashboards, because which
+ * screen you get is decided by the account you sign in with, not by the code you scanned.
+ */
+restaurantRouter.get(
+  '/staff-qr',
+  requirePermission('settings:write'),
+  asyncHandler(async (_req, res) => {
+    const base = String(env.PUBLIC_BASE_URL).replace(/\/$/, '');
+    const code = async (path: string) => {
+      const url = `${base}${path}`;
+      return { url, dataUrl: await QRCode.toDataURL(url, { margin: 1, width: 420, errorCorrectionLevel: 'M' }) };
+    };
+    res.json({ owner: await code('/owner.html'), manager: await code('/manager.html') });
+  }),
+);
+
 const patchSchema = z.object({
   name: z.string().min(2).max(80).optional(),
   phone: z.string().max(20).optional(),

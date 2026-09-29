@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Link2, Plus, QrCode, RefreshCw, Trash2, Check } from 'lucide-react';
+import { Link2, Plus, Printer, QrCode, RefreshCw, Trash2, Check } from 'lucide-react';
 import { useQuery, invalidate } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
 import type { Paginated, Table, User } from '../../lib/types';
@@ -95,6 +95,7 @@ export function TablesPage() {
       )}
 
       {qr && <QrModal table={qr} onClose={() => setQr(null)} />}
+      {can(user?.role, 'settings:write') && <OrderingQrCard />}
       {addOpen && <AddTableModal onClose={() => setAddOpen(false)} />}
     </div>
   );
@@ -159,6 +160,69 @@ function QrModal({ table, onClose }: { table: Table; onClose: () => void }) {
     w.document.write(`<div style="text-align:center;font-family:sans-serif;padding:24px"><h2 style="margin:0">Sizzle</h2><p>Table ${table.number} — scan to view the menu</p><img src="${img.dataUrl}" style="width:280px" onload="window.print()" /></div>`);
     w.document.close();
   }
+}
+
+/**
+ * The guest code for everyone without a table — the counter, the takeaway bag and the
+ * delivery box all point at the same ordering app. It sits with the table stickers
+ * because that is where the rest of the printing happens.
+ */
+function OrderingQrCard() {
+  const { restaurant } = useAuth();
+  const { data, loading } = useQuery<{ url: string; dataUrl: string }>('restaurants:app-qr', '/restaurants/app-qr');
+  const name = restaurant?.name ?? 'Sizzle';
+
+  function print() {
+    if (!data) return;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(
+      `<div style="text-align:center;font-family:system-ui,sans-serif;padding:32px">` +
+        `<p style="margin:0;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#78716c">Order from</p>` +
+        `<h2 style="margin:4px 0 18px;font-size:26px">${name}</h2>` +
+        `<img src="${data.dataUrl}" style="width:260px" onload="window.print()" />` +
+        `<p style="margin:16px 0 0;font-size:15px;font-weight:600">Scan to open the menu</p>` +
+        `<p style="margin:4px 0 0;font-size:12.5px;color:#78716c">Order it to your door or hold a table — the bill and the live status stay on your phone.</p>` +
+      `</div>`,
+    );
+    w.document.close();
+  }
+
+  return (
+    <Card title="Guest ordering code" subtitle="The same menu as a table QR, without a table" className="mt-4">
+      <div className="flex flex-col items-center gap-5 p-4 sm:flex-row">
+        <span className="grid h-40 w-40 shrink-0 place-items-center overflow-hidden rounded-2xl bg-ink-50 ring-1 ring-ink-200">
+          {data ? (
+            <img src={data.dataUrl} alt={`Ordering QR for ${name}`} className="h-full w-full object-contain p-1.5" />
+          ) : (
+            <span className={`text-[12px] text-ink-400 ${loading ? 'animate-pulse' : ''}`}>{loading ? 'Rendering…' : 'Unavailable'}</span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <p className="text-[13px] leading-relaxed text-ink-600">
+            Print this for the counter, the bag and the delivery box. Whoever scans it opens the menu straight away and
+            can install it as an app, so their address and their live orders stay on the phone between visits.
+          </p>
+          {data && <p className="break-all rounded-lg bg-ink-50 px-3 py-2 font-mono text-[12px] text-ink-500 ring-1 ring-ink-200">{data.url}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Link2 size={13} />}
+              disabled={!data}
+              onClick={() => {
+                void navigator.clipboard?.writeText(data?.url ?? '');
+                toast('Ordering link copied', 'success');
+              }}
+            >
+              Copy link
+            </Button>
+            <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!data} onClick={print}>Print sticker</Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 function AddTableModal({ onClose }: { onClose: () => void }) {
