@@ -19,9 +19,11 @@ import {
   appOrderView,
   confirmAppCheckout,
   listAppRestaurants,
+  listAppSeats,
   placeAppOrder,
   publicMenu,
   restaurantBySlug,
+  sitAppGuest,
   startAppCheckout,
 } from '../../services/customerApp.service';
 import { checkAvailability, createBooking } from '../../services/booking.service';
@@ -190,6 +192,61 @@ publicRouter.post(
     res.json({
       payment: payment ? { _id: String(payment._id), method: payment.method, amount: payment.amount, status: payment.status } : null,
       bill: bill ? { paymentStatus: bill.paymentStatus, grandTotal: bill.grandTotal } : null,
+    });
+  }),
+);
+
+/** Free seats the app can offer when there is no sticker in reach. */
+publicRouter.get(
+  '/apps/:slug/seats',
+  asyncHandler(async (req, res) => {
+    const restaurant = await restaurantBySlug(req.params.slug);
+    res.json({ seats: await listAppSeats(String(restaurant._id)) });
+  }),
+);
+
+/**
+ * A guest sits down: the camera read the table sticker, or they tapped a seat from the
+ * list. Either way it opens the very same session the sticker flow opens, so the floor,
+ * the kitchen and the bill never learn there was a second door in.
+ */
+publicRouter.post(
+  '/apps/:slug/sit',
+  publicWriteLimiter,
+  validate({
+    body: z.object({
+      code: z.string().min(6).max(200),
+      guestCount: z.number().int().min(1).max(40).optional(),
+      customerName: z.string().max(80).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const restaurant = await restaurantBySlug(req.params.slug);
+    const { session, table } = await sitAppGuest({
+      restaurantId: String(restaurant._id),
+      code: req.body.code,
+      guestCount: req.body.guestCount,
+      customerName: req.body.customerName,
+    });
+
+    await notifyRoles(String(restaurant._id), ['WAITER'], {
+      type: 'SYSTEM',
+      title: `Table ${table.number} seated from the app`,
+      body: `${session.guestCount} guest(s)${session.customerName ? ` · ${session.customerName}` : ''}`,
+      entityType: 'Table',
+      entityId: table.id,
+    });
+
+    res.status(201).json({
+      session: {
+        _id: String(session._id),
+        publicToken: session.publicToken,
+        status: session.status,
+        guestCount: session.guestCount,
+        customerName: session.customerName,
+      },
+      table,
+      restaurantId: String(restaurant._id),
     });
   }),
 );

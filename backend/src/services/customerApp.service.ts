@@ -5,11 +5,13 @@
  * Everything money-related still happens behind staff counters — this service only
  * ever records what the guest *said* they want to pay with.
  */
-import { AddonModel, BillModel, CategoryModel, OrderModel, PaymentModel, ProductModel, RestaurantModel, type Order as OrderRow } from '../models';
+import { AddonModel, BillModel, CategoryModel, OrderModel, PaymentModel, ProductModel, RestaurantModel, TableModel, type Order as OrderRow } from '../models';
 import { ApiError } from '../utils/httpError';
-import { randomToken } from '../utils/tokens';
+import { hmacHex, randomToken, safeEqual } from '../utils/tokens';
+import { env } from '../config/env';
 import { createOrder, getOrder } from './order.service';
 import { createBill, startOnlinePayment } from './billing.service';
+import { openSession } from './table.service';
 import { captureMockPayment } from './mockCapture';
 import type { Fulfilment, OrderPaymentMode } from '../types/constants';
 import type { IncomingItem } from './pricing.service';
@@ -200,6 +202,76 @@ export function guestTicketView(
     statusHistory: order.statusHistory,
     bill: bill ? { publicToken: bill.publicToken, billNumber: bill.billNumber, grandTotal: bill.grandTotal } : null,
   };
+}
+
+/**
+ * A guest who walked in without a sticker still has to prove they are standing at a
+ * table. The seat list hands out a seat code signed for ten minutes instead of the
+ * permanent token printed on the furniture, so a scraped list ages out on its own.
+ */
+const SEAT_TICKET_MS = 10 * 60 * 1000;
+
+function seatTicketFor(tableId: string): string {
+  const expiresAt = Date.now() + SEAT_TICKET_MS;
+  return `${tableId}.${expiresAt}.${hmacHex(env.ACCESS_TOKEN_SECRET, `${tableId}.${expiresAt}`)}`;
+}
+
+/** Every code we print is one path segment, so a photo of the sticker URL sits down alike. */
+function tokenFromCode(raw: string): string {
+  const path = raw.trim().split('?')[0].split('#')[0].replace(/\/+$/, '');
+  return (path.includes('/') ? (path.split('/').pop() ?? path) : path).trim();
+}
+
+function readSeatTicket(ticket: string): string | null {
+  const [tableId, expiresAt, signature] = ticket.split('.');
+  if (!tableId || !expiresAt || !signature) return null;
+  if (Number(expiresAt) < Date.now()) return null;
+  return safeEqual(signature, hmacHex(env.ACCESS_TOKEN_SECRET, `${tableId}.${expiresAt}`)) ? tableId : null;
+}
+
+/** Free tables the app can offer, minus anything that would leak a sticker token. */
+export async function listAppSeats(restaurantId: string) {
+  const tables = await TableModel.find({ restaurantId, status: 'AVAILABLE' })
+    .select('number section capacity')
+    .sort({ section: 1, number: 1 })
+    .lean();
+
+  return tables.map((t) => ({
+    id: String(t._id),
+    number: t.number,
+    section: t.section,
+    capacity: t.capacity,
+    seatCode: seatTicketFor(String(t._id)),
+  }));
+}
+
+/**
+ * Sitting down from the app: either the camera read the table sticker or the guest
+ * tapped a seat from the list. Both end in the same open session the sticker flow
+ * uses, so the waiter's floor, the kitchen and the bill all behave as they always did.
+ */
+export async function sitAppGuest(opts: { restaurantId: string; code: string; guestCount?: number; customerName?: string }) {
+  const token = tokenFromCode(opts.code);
+  const fromTicket = readSeatTicket(token);
+  const table = fromTicket
+    ? await TableModel.findOne({ _id: fromTicket, restaurantId: opts.restaurantId }).lean()
+    : await TableModel.findOne({ qrToken: token, restaurantId: opts.restaurantId }).lean();
+
+  if (!table) throw ApiError.notFound('We could not match that seat to this restaurant');
+  if (table.status === 'CLEANING') throw ApiError.conflict('This table is being cleaned — give us a minute');
+  if (fromTicket && table.status !== 'AVAILABLE') {
+    throw ApiError.conflict('That seat has just been taken — pick another or scan the sticker');
+  }
+
+  const session = await openSession({
+    restaurantId: opts.restaurantId,
+    tableId: String(table._id),
+    guestCount: opts.guestCount,
+    customerName: opts.customerName,
+    via: 'QR',
+  });
+
+  return { session, table: { id: String(table._id), number: table.number, section: table.section } };
 }
 
 export async function appOrderView(trackingToken: string) {

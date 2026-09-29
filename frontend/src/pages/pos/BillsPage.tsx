@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Banknote, CreditCard, Inbox, Printer, RotateCcw, Search, Smartphone } from 'lucide-react';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
@@ -19,22 +20,26 @@ const RANGES = [
 export function BillsPage() {
   const { user } = useAuth();
   const settle = can(user?.role, 'payments:write');
-  const [range, setRange] = useState<(typeof RANGES)[number]['value']>('unpaid');
-  const [search, setSearch] = useState('');
-  const [debounced, setDebounced] = useState('');
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const scanned = params.get('search') ?? params.get('bill');
+  // A scan is about the now, so it starts on today's bills rather than the unpaid filter.
+  const [range, setRange] = useState<(typeof RANGES)[number]['value']>(scanned ? 'today' : 'unpaid');
+  const [search, setSearch] = useState(params.get('search') ?? '');
+  const [debounced, setDebounced] = useState(params.get('search') ?? '');
+  // A scanned bill QR lands here with the bill already named, so the drawer opens itself.
+  const [openId, setOpenId] = useState<string | null>(params.get('bill'));
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search), 280);
     return () => clearTimeout(t);
   }, [search]);
 
-  const params: Record<string, unknown> = { limit: 60 };
-  if (range === 'unpaid') params.unpaidOnly = true;
-  if (range === 'today') params.todayOnly = true;
-  if (debounced) params.search = debounced;
+  const query: Record<string, unknown> = { limit: 60 };
+  if (range === 'unpaid') query.unpaidOnly = true;
+  if (range === 'today') query.todayOnly = true;
+  if (debounced) query.search = debounced;
 
-  const { data, loading } = useQuery<Paginated<Bill>>('bills:list', '/billing', params);
+  const { data, loading } = useQuery<Paginated<Bill>>('bills:list', '/billing', query);
   const bills = data?.data ?? [];
   const outstanding = bills.filter((b) => b.paymentStatus === 'UNPAID').reduce((s, b) => s + b.grandTotal, 0);
 
@@ -70,7 +75,7 @@ export function BillsPage() {
                 <button onClick={() => setOpenId(b._id)} className="min-w-0 flex-1 text-left">
                   <p className="flex items-center gap-2">
                     <span className="font-display text-[14px] font-800 text-ink-900">{b.billNumber}</span>
-                    {b.tableNumber && <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10.5px] font-bold uppercase text-ink-500">T{b.tableNumber.replace(/\D/g, '') || b.tableNumber}</span>}
+                    {b.tableNumber && <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10.5px] font-bold uppercase text-ink-500">{b.tableNumber}</span>}
                   </p>
                   <p className="mt-0.5 truncate text-[12px] text-ink-500">
                     {b.customerName || 'Guest'} · {clockTime(b.issuedAt)} · {b.orderIds.length} order{b.orderIds.length > 1 ? 's' : ''}

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Flame, Microwave, PauseCircle, PlayCircle, Inbox } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { CheckCircle2, Flame, Microwave, PauseCircle, PlayCircle, Inbox, ScanLine } from 'lucide-react';
 import { useQuery, patch } from '../../lib/query';
 import { http } from '../../lib/api';
 import type { Order, OrderStatus, Paginated, Station } from '../../lib/types';
 import { SOURCE_META, stationLabel } from '../../lib/statusMaps';
 import { minutesSince } from '../../lib/format';
-import { EmptyState, SegmentedControl } from '../../components/ui';
+import { Button, SegmentedControl } from '../../components/ui';
 import { toast } from '../../store/toasts';
 
 const BOARD_COLUMNS: { key: OrderStatus; label: string; accent: string; next?: OrderStatus; nextLabel?: string }[] = [
@@ -18,14 +19,29 @@ const BOARD_COLUMNS: { key: OrderStatus; label: string; accent: string; next?: O
 const STATIONS: (Station | 'ALL')[] = ['ALL', 'MAIN', 'GRILL', 'TANDOOR', 'FRY', 'BAR', 'DESSERT'];
 
 export function KdsBoard() {
+  const [params, setParams] = useSearchParams();
+  // A scanned sticker or ticket arrives with the table or ticket named, so the cook is
+  // not left hunting for it down a long pass.
+  const focusTable = params.get('table') ?? '';
+  const focusOrder = params.get('order') ?? '';
   const [station, setStation] = useState<Station | 'ALL'>('ALL');
   const { data } = useQuery<{ data: Order[] }>('kds:orders', '/kitchen/orders');
 
   const orders = useMemo(() => {
     const all = data?.data ?? [];
-    if (station === 'ALL') return all;
-    return all.filter((o) => o.items.some((i) => i.station === station));
-  }, [data, station]);
+    const byStation = station === 'ALL' ? all : all.filter((o) => o.items.some((i) => i.station === station));
+    if (focusOrder) return byStation.filter((o) => o._id === focusOrder || o.orderNumber.toLowerCase() === focusOrder.toLowerCase());
+    if (focusTable) return byStation.filter((o) => (o.tableNumber ?? '') === focusTable);
+    return byStation;
+  }, [data, station, focusOrder, focusTable]);
+
+  const scannedTo = focusOrder || focusTable;
+  const clearFocus = () => {
+    const next = new URLSearchParams(params);
+    next.delete('table');
+    next.delete('order');
+    setParams(next, { replace: true });
+  };
 
   const move = async (order: Order, next: OrderStatus) => {
     // optimistic: drop from current column, appear in next instantly
@@ -50,6 +66,21 @@ export function KdsBoard() {
 
   return (
     <div>
+      {scannedTo && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-ember-500/40 bg-ember-500/10 px-3.5 py-2.5">
+          <ScanLine size={15} className="text-ember-300" />
+          <p className="min-w-0 flex-1 text-[12.5px] font-semibold text-ink-100">
+            {focusTable ? `Showing Table ${focusTable}` : `Showing ticket ${focusOrder}`} — straight from your scan
+          </p>
+          <button
+            onClick={clearFocus}
+            className="rounded-lg border border-white/20 px-2.5 py-1 text-[12px] font-semibold text-ink-200 hover:bg-white/10"
+          >
+            Show the whole board
+          </button>
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <SegmentedControl
           size="sm"
@@ -67,32 +98,43 @@ export function KdsBoard() {
       {data && orders.length === 0 && (
         <div className="grid place-items-center rounded-2xl border border-dashed border-white/15 py-20 text-center">
           <CheckCircle2 size={34} className="mb-2 text-leaf-500" />
-          <p className="font-display text-lg font-700 text-ink-200">Board is clear</p>
-          <p className="text-[13px] text-ink-500">New tickets land here the moment a guest or waiter sends them.</p>
+          <p className="font-display text-lg font-700 text-ink-200">{scannedTo ? 'That ticket is off the pass' : 'Board is clear'}</p>
+          <p className="max-w-md text-[13px] leading-relaxed text-ink-500">
+            {scannedTo
+              ? 'It has already been cooked and handed off, or it belongs to another station. The full board is one tap away.'
+              : 'New tickets land here the moment a guest or waiter sends them.'}
+          </p>
+          {scannedTo && (
+            <Button variant="secondary" className="mt-3" onClick={clearFocus}>
+              Show the whole board
+            </Button>
+          )}
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-4">
-        {BOARD_COLUMNS.map((col) => {
-          const list = orders
-            .filter((o) => o.status === col.key)
-            .sort((a, b) => new Date(a.placedAt).getTime() - new Date(b.placedAt).getTime());
-          return (
-            <section key={col.key} className={`rounded-2xl border border-white/10 border-t-4 bg-white/[0.03] ${col.accent}`}>
-              <header className="flex items-center justify-between px-3.5 py-3">
-                <h2 className="font-display text-[14px] font-700 uppercase tracking-wide text-ink-200">{col.label}</h2>
-                <span className="grid h-6 min-w-6 place-items-center rounded-full bg-white/10 px-1.5 text-[12px] font-bold text-white">{list.length}</span>
-              </header>
-              <div className="space-y-3 px-3 pb-3 lg:max-h-[calc(100vh-15rem)] lg:overflow-y-auto">
-                {list.map((o) => (
-                  <Ticket key={o._id} order={o} next={col.next} nextLabel={col.nextLabel} onAdvance={move} activeStation={station} />
-                ))}
-                {!list.length && <p className="px-1 py-6 text-center text-[12px] text-ink-600">Nothing here</p>}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      {(!scannedTo || orders.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-4">
+          {BOARD_COLUMNS.map((col) => {
+            const list = orders
+              .filter((o) => o.status === col.key)
+              .sort((a, b) => new Date(a.placedAt).getTime() - new Date(b.placedAt).getTime());
+            return (
+              <section key={col.key} className={`rounded-2xl border border-white/10 border-t-4 bg-white/[0.03] ${col.accent}`}>
+                <header className="flex items-center justify-between px-3.5 py-3">
+                  <h2 className="font-display text-[14px] font-700 uppercase tracking-wide text-ink-200">{col.label}</h2>
+                  <span className="grid h-6 min-w-6 place-items-center rounded-full bg-white/10 px-1.5 text-[12px] font-bold text-white">{list.length}</span>
+                </header>
+                <div className="space-y-3 px-3 pb-3 lg:max-h-[calc(100vh-15rem)] lg:overflow-y-auto">
+                  {list.map((o) => (
+                    <Ticket key={o._id} order={o} next={col.next} nextLabel={col.nextLabel} onAdvance={move} activeStation={station} />
+                  ))}
+                  {!list.length && <p className="px-1 py-6 text-center text-[12px] text-ink-600">Nothing here</p>}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { connectTestDb, disconnectTestDb, makeDiner, resetDb } from './helpers';
-import { RestaurantModel } from '../src/models';
-import { appOrderView, confirmAppCheckout, placeAppOrder, startAppCheckout } from '../src/services/customerApp.service';
+import { connectTestDb, disconnectTestDb, makeDiner, makeRestaurant, resetDb } from './helpers';
+import { RestaurantModel, TableModel } from '../src/models';
+import { appOrderView, confirmAppCheckout, listAppSeats, placeAppOrder, sitAppGuest, startAppCheckout } from '../src/services/customerApp.service';
 
 beforeEach(async () => {
   await connectTestDb();
@@ -110,3 +110,80 @@ describe('the guest ordering app', () => {
     await expect(appOrderView('not-a-real-token')).rejects.toThrow(/cannot find that order/i);
   });
 });
+
+describe('seating a guest from the app', () => {
+  it('offers only free tables, and never the token printed on the sticker', async () => {
+    const diner = await makeDiner();
+    const seats = await listAppSeats(diner.restaurantId);
+    const small = await TableModel.findById(diner.smallTableId).lean();
+
+    expect(seats.map((s) => s.number).sort()).toEqual(['L1', 'S1']);
+    expect(seats.every((s) => !s.seatCode.includes(String(small?.qrToken)))).toBe(true);
+    // The code is table id + expiry + signature, and it does not contain the sticker token.
+    expect(seats[0].seatCode.split('.')).toHaveLength(3);
+  });
+
+  it('sits a guest on the chosen seat and opens the same session a scan would', async () => {
+    const diner = await makeDiner();
+    const [seat] = await listAppSeats(diner.restaurantId);
+    const { session, table } = await sitAppGuest({
+      restaurantId: diner.restaurantId,
+      code: seat.seatCode,
+      guestCount: 3,
+      customerName: 'Meera Nair',
+    });
+
+    expect(table.number).toBe(seat.number);
+    expect(session.guestCount).toBe(3);
+    expect(session.status).toBe('OPEN');
+    expect(String(session.publicToken).length).toBeGreaterThan(16);
+    expect((await TableModel.findById(table.id).lean())?.status).toBe('OCCUPIED');
+  });
+
+  it('accepts the real sticker when the camera reads it', async () => {
+    const diner = await makeDiner();
+    const token = String((await TableModel.findById(diner.largeTableId).lean())?.qrToken);
+
+    const { table } = await sitAppGuest({ restaurantId: diner.restaurantId, code: token, guestCount: 5 });
+    expect(table.number).toBe('L1');
+  });
+
+  it('sits the guest from the printed URL the camera actually returns', async () => {
+    const diner = await makeDiner();
+    const token = String((await TableModel.findById(diner.smallTableId).lean())?.qrToken);
+
+    const { table } = await sitAppGuest({
+      restaurantId: diner.restaurantId,
+      code: `https://demo.vercel.app/t/${token}?from=qr`,
+      guestCount: 3,
+    });
+    expect(table.number).toBe('S1');
+  });
+
+  it('refuses a seat the room has already taken', async () => {
+    const diner = await makeDiner();
+    const [seat] = await listAppSeats(diner.restaurantId);
+    await sitAppGuest({ restaurantId: diner.restaurantId, code: seat.seatCode });
+
+    // The code was signed while the table was free; a walk-in beat the guest to it.
+    await expect(sitAppGuest({ restaurantId: diner.restaurantId, code: seat.seatCode, guestCount: 2 })).rejects.toThrow(/just been taken/);
+  });
+
+  it('refuses a tampered or expired seat code', async () => {
+    const diner = await makeDiner();
+    const [seat] = await listAppSeats(diner.restaurantId);
+    const [tableId, , sig] = seat.seatCode.split('.');
+
+    await expect(sitAppGuest({ restaurantId: diner.restaurantId, code: `${tableId}.9999999999999.${sig}` })).rejects.toThrow(/could not match that seat/);
+    await expect(sitAppGuest({ restaurantId: diner.restaurantId, code: `${tableId}.${Date.now() + 60000}.deadbeef` })).rejects.toThrow(/could not match that seat/);
+  });
+
+  it('will not seat a guest at another restaurant using its own seat code', async () => {
+    const diner = await makeDiner();
+    const [seat] = await listAppSeats(diner.restaurantId);
+    const other = await makeRestaurant();
+
+    await expect(sitAppGuest({ restaurantId: String(other.restaurant._id), code: seat.seatCode })).rejects.toThrow(/could not match that seat/);
+  });
+});
+

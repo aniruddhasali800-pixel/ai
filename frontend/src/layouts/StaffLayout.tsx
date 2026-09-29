@@ -5,6 +5,7 @@ import {
   ClipboardList,
   LayoutGrid,
   Link2,
+  ScanLine,
   ScrollText,
   Settings,
   ShoppingBasket,
@@ -20,6 +21,7 @@ import { can } from '../store/auth';
 
 const NAV: (NavItem & { permission: string })[] = [
   { to: '/app', label: 'Dashboard', icon: <LayoutGrid size={17} />, permission: 'reports:read', end: true },
+  { to: '/app/scan', label: 'Scan', icon: <ScanLine size={17} />, permission: 'orders:read' },
   { to: '/app/orders', label: 'Orders', icon: <ClipboardList size={17} />, permission: 'orders:read' },
   { to: '/app/tables', label: 'Tables & QR', icon: <Sparkles size={17} />, permission: 'tables:read' },
   { to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={17} />, permission: 'menu:read' },

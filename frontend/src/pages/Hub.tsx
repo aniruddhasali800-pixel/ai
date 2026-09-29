@@ -9,6 +9,7 @@ import {
   ClipboardList,
   ConciergeBell,
   CreditCard,
+  Download,
   ExternalLink,
   LayoutGrid,
   LogOut,
@@ -16,6 +17,7 @@ import {
   QrCode,
   Receipt,
   ScrollText,
+  ScanLine,
   Settings,
   ShieldCheck,
   Smartphone,
@@ -93,6 +95,15 @@ function canOpen(path: string, role?: Role | null): boolean {
   return can(role, 'orders:read');
 }
 
+/** The master scanner lives in every staff dashboard — this is where each role's sits. */
+function scanPathFor(role?: Role | null): string | null {
+  if (!role) return null;
+  if (role === 'KITCHEN') return '/kds/scan';
+  if (role === 'CASHIER') return '/pos/scan';
+  if (role === 'WAITER') return '/floor/scan';
+  return '/app/scan';
+}
+
 export function Hub() {
   const navigate = useNavigate();
   const { user, restaurant, login, logout } = useAuth();
@@ -110,6 +121,7 @@ export function Hub() {
   const menuTable = seated[0] ?? tables[0];
   const unpaid = billsData?.data ?? [];
   const slug = restaurant?.slug ?? 'saffron-and-smoke';
+  const scanFor = scanPathFor(user?.role);
 
   async function enter(screen: Screen) {
     if (user?.role === screen.role) {
@@ -176,6 +188,26 @@ export function Hub() {
         </p>
       </section>
 
+      {scanFor && (
+        <section className="mx-auto max-w-6xl px-5 pt-6">
+          <div className="flex flex-wrap items-center gap-3.5 rounded-2xl bg-ink-900 px-5 py-4 text-white">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-ember-500 text-white">
+              <ScanLine size={21} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-display text-[16.5px] font-800 leading-tight">The master scanner</h2>
+              <p className="mt-0.5 text-[13px] leading-relaxed text-ink-300">
+                One camera box for every job. Hold up a table sticker, a bill, a ticket or the shopfront code and it opens
+                the screen {user?.role === 'KITCHEN' ? 'the pass' : user?.role === 'CASHIER' ? 'the till' : user?.role === 'WAITER' ? 'your floor' : 'the back office'} wants — typed codes work too.
+              </p>
+            </div>
+            <LinkButton to={scanFor} size="sm" variant="primary" icon={<ScanLine size={14} />}>
+              Open the scanner
+            </LinkButton>
+          </div>
+        </section>
+      )}
+
       <section className="mx-auto max-w-6xl px-5 py-6">
         <h2 className="label">Staff screens</h2>
         <div className="mt-3 grid gap-4 lg:grid-cols-2">
@@ -239,6 +271,12 @@ export function Hub() {
         <h2 className="label">Guest screens — no login</h2>
         <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <GuestCard
+            icon={Download}
+            title="Ordering app to install"
+            body={`Pickup, delivery or eat in at /eat/${slug} — Add to Home Screen and it runs full screen`}
+            to={`/eat/${slug}`}
+          />
+          <GuestCard
             icon={QrCode}
             title="Table QR menu"
             body={menuTable ? `Table ${menuTable.number} · scans to the live menu` : 'Every table card carries its own token'}
@@ -274,6 +312,7 @@ export function Hub() {
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { to: '/app', label: 'Live dashboard', icon: LayoutGrid, perm: 'orders:read' },
+              { to: '/app/scan', label: 'Master scanner', icon: ScanLine, perm: 'orders:read' },
               { to: '/app/orders', label: 'All orders', icon: ClipboardList, perm: 'orders:read' },
               { to: '/app/tables', label: 'Tables and QR cards', icon: Store, perm: 'tables:read' },
               { to: '/app/menu', label: 'Menu and pricing', icon: MenuIcon, perm: 'menu:read' },

@@ -638,3 +638,30 @@ export interface UpiCharge {
   amount: number;
   note: string;
 }
+
+/** What the API decided a scanned code means *for this role* — never chosen in the browser. */
+export interface ResolvedScan {
+  kind: 'TABLE' | 'SESSION' | 'ORDER' | 'BILL' | 'RESTAURANT';
+  id: string;
+  headline: string;
+  note: string;
+  status: string;
+  amount?: number;
+  href: string;
+  links: { label: string; href: string }[];
+}
+
+/** A free table offered to the app, carrying a ten-minute seat code instead of the sticker token. */
+export interface AppSeat {
+  id: string;
+  number: string;
+  section: string;
+  capacity: number;
+  seatCode: string;
+}
+
+export interface AppSitResult {
+  session: { _id: string; publicToken: string; status: SessionStatus; guestCount: number; customerName: string };
+  table: { id: string; number: string; section: string };
+  restaurantId: string;
+}

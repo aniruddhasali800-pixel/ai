@@ -40,6 +40,7 @@ const AppLanding = lazy(() => import('./pages/app/AppLanding').then((m) => ({ de
 const CustomerApp = lazy(() => import('./pages/app/CustomerApp').then((m) => ({ default: m.CustomerApp })));
 const AppTrack = lazy(() => import('./pages/app/AppTrack').then((m) => ({ default: m.AppTrack })));
 const MockCheckout = lazy(() => import('./pages/app/MockCheckout').then((m) => ({ default: m.MockCheckout })));
+const ScanPage = lazy(() => import('./pages/ScanPage').then((m) => ({ default: m.ScanPage })));
 
 export function App() {
   return (
@@ -51,6 +52,7 @@ export function App() {
         {/* Back office — owner & manager */}
         <Route path="/app" element={<StaffLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="scan" element={<ScanPage />} />
           <Route path="orders" element={<OrdersPage />} />
           <Route path="orders/:id" element={<OrderDetailPage />} />
           <Route path="tables" element={<TablesPage />} />
@@ -67,15 +69,18 @@ export function App() {
         {/* Role-specific workspaces */}
         <Route path="/kds" element={<KdsLayout />}>
           <Route index element={<KdsBoard />} />
+          <Route path="scan" element={<ScanPage />} />
         </Route>
         <Route path="/floor" element={<FloorLayout />}>
           <Route index element={<WaiterFloor />} />
+          <Route path="scan" element={<ScanPage />} />
           <Route path="map" element={<FloorMap />} />
           <Route path="order" element={<NewOrder />} />
           <Route path="bookings" element={<BookingsPage />} />
         </Route>
         <Route path="/pos" element={<PosLayout />}>
           <Route index element={<BillsPage />} />
+          <Route path="scan" element={<ScanPage />} />
           <Route path="requests" element={<PosRequests />} />
         </Route>
 

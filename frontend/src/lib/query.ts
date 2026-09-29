@@ -9,6 +9,9 @@ import { http, errMsg } from './api';
 const values = new Map<string, unknown>();
 const stamp = new Map<string, number>();
 const gens = new Map<string, number>();
+// Which params produced each payload. A new range or filter under the same key is a
+// different question, so the cached answer has to stop counting as fresh.
+const asked = new Map<string, string>();
 const listeners = new Set<() => void>();
 
 function bump() {
@@ -43,9 +46,10 @@ export function peek<T>(key: string): T | undefined {
   return values.get(key) as T | undefined;
 }
 
-export function write<T>(key: string, value: T) {
+export function write<T>(key: string, value: T, params?: Record<string, unknown>) {
   values.set(key, value);
   stamp.set(key, Date.now());
+  if (params !== undefined) asked.set(key, JSON.stringify(params));
   bumpVersion();
 }
 
@@ -61,11 +65,13 @@ export function invalidate(prefix?: string) {
     for (const key of [...values.keys()]) touchGen(key);
     values.clear();
     stamp.clear();
+    asked.clear();
   } else {
     for (const key of [...values.keys()]) {
       if (key.startsWith(prefix)) {
         values.delete(key);
         stamp.delete(key);
+        asked.delete(key);
         touchGen(key);
       }
     }
@@ -107,7 +113,7 @@ export function useQuery<T>(
     setError(null);
     try {
       const { data } = await http.get(url, { params: params ? JSON.parse(fingerprint) : undefined });
-      write(key, data);
+      write(key, data, params);
     } catch (err) {
       setError(errMsg(err, 'Could not load this view'));
     } finally {
@@ -118,17 +124,21 @@ export function useQuery<T>(
 
   useEffect(() => {
     if (!enabled) return;
-    const fresh = values.has(key) && (options?.refetchOnMount ? false : Date.now() - (stamp.get(key) ?? 0) < 20_000);
+    // The cached payload only answers the current question when it was fetched with these params.
+    const fresh =
+      asked.get(key) === fingerprint &&
+      values.has(key) &&
+      (options?.refetchOnMount ? false : Date.now() - (stamp.get(key) ?? 0) < 20_000);
     if (!fresh) void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, key, run, gen]);
+  }, [enabled, key, run, gen, fingerprint]);
 
   return {
     data: values.get(key) as T | undefined,
     loading: loading || (enabled && !values.has(key) && !error),
     error,
     refetch: () => void run(),
-    setData: (value: T) => write(key, value),
+    setData: (value: T) => write(key, value, params),
   };
 }
 

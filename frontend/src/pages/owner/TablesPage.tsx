@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Link2, Plus, QrCode, RefreshCw, Trash2, Check } from 'lucide-react';
 import { useQuery, invalidate } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
@@ -16,6 +17,14 @@ export function TablesPage() {
   const { data: staff } = useQuery<Paginated<User>>('staff', '/staff');
   const [qr, setQr] = useState<Table | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  // Scanning a sticker brings the owner straight to that table's card.
+  const [params] = useSearchParams();
+  const focusId = params.get('table') ?? '';
+  const focusRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (focusId && data) focusRef.current?.scrollIntoView({ block: 'center' });
+  }, [focusId, data]);
 
   if (loading && !data) return <Spinner label="Loading tables…" />;
   const tables = data?.data ?? [];
@@ -42,7 +51,11 @@ export function TablesPage() {
             const meta = TABLE_STATUS_META[t.status];
             const waiter = waiters.find((w) => w._id === t.assignedWaiterId);
             return (
-              <article key={t._id} className="card flex flex-col p-3.5">
+              <article
+                key={t._id}
+                ref={t._id === focusId ? focusRef : undefined}
+                className={`card flex flex-col p-3.5 ${t._id === focusId ? 'ring-2 ring-ember-500' : ''}`}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <span className="font-display text-lg font-800 text-ink-900">Table {t.number}</span>

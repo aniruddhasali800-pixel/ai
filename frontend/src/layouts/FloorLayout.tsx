@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { CalendarCheck, ClipboardList, LogOut, PlusCircle, LayoutDashboard, Users } from 'lucide-react';
+import { CalendarCheck, ClipboardList, LogOut, PlusCircle, LayoutDashboard, ScanLine, Users } from 'lucide-react';
 import { useAuth, can } from '../store/auth';
 import { useRealtimeShell } from '../hooks/useRealtimeShell';
 import { NotificationBell } from '../components/NotificationBell';
@@ -22,6 +22,7 @@ export function FloorLayout() {
 
   const tabs = [
     { to: '/floor', label: 'Floor', icon: Users, end: true },
+    { to: '/floor/scan', label: 'Scan', icon: ScanLine },
     { to: '/floor/order', label: 'New order', icon: PlusCircle },
     { to: '/floor/map', label: 'Tables', icon: ClipboardList },
     { to: '/floor/bookings', label: 'Bookings', icon: CalendarCheck },
