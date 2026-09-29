@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import QRCode from 'qrcode';
 import { RestaurantModel } from '../../models';
-import { env } from '../../config/env';
+import { env, allowedOrigins, isPrivateAddress } from '../../config/env';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
@@ -14,6 +14,20 @@ import { recordAudit } from '../../services/audit.service';
 export const restaurantRouter = Router();
 
 restaurantRouter.use(requireAuth);
+
+/**
+ * A printed code has to open on a phone, so it encodes the host the owner is looking at.
+ * Under split hosting the client lives on its own host and only reaches this API for data,
+ * so PUBLIC_BASE_URL alone would print a code for the service behind it — the one that
+ * sleeps between requests. Only a public Origin qualifies: a laptop address is exactly what
+ * PUBLIC_BASE_URL was set to, so a local print must keep using it.
+ */
+function clientBase(origin: string | string[] | undefined): string {
+  const single = Array.isArray(origin) ? origin[0] : origin;
+  const clean = String(single ?? '').replace(/\/+$/, '');
+  const usable = !!clean && allowedOrigins.includes(clean) && !isPrivateAddress(clean);
+  return usable ? clean : String(env.PUBLIC_BASE_URL).replace(/\/+$/, '');
+}
 
 restaurantRouter.get(
   '/',
@@ -31,7 +45,7 @@ restaurantRouter.get(
   asyncHandler(async (req, res) => {
     const restaurant = await RestaurantModel.findById(req.auth!.restaurantId).lean();
     if (!restaurant) throw ApiError.notFound('Restaurant not found');
-    const url = `${String(env.PUBLIC_BASE_URL).replace(/\/$/, '')}/eat/${restaurant.slug}`;
+    const url = `${clientBase(req.headers.origin)}/eat/${restaurant.slug}`;
     const dataUrl = await QRCode.toDataURL(url, { margin: 1, width: 420, errorCorrectionLevel: 'M' });
     res.json({ url, dataUrl });
   }),
@@ -45,8 +59,8 @@ restaurantRouter.get(
 restaurantRouter.get(
   '/staff-qr',
   requirePermission('settings:write'),
-  asyncHandler(async (_req, res) => {
-    const base = String(env.PUBLIC_BASE_URL).replace(/\/$/, '');
+  asyncHandler(async (req, res) => {
+    const base = clientBase(req.headers.origin);
     const code = async (path: string) => {
       const url = `${base}${path}`;
       return { url, dataUrl: await QRCode.toDataURL(url, { margin: 1, width: 420, errorCorrectionLevel: 'M' }) };

@@ -20,7 +20,7 @@ const demoClients = ['https://ai-ecru-kappa-14.vercel.app'];
 const builtInOrigins = [hosted, ...demoClients, localDev].filter(Boolean) as string[];
 
 /** A laptop address can never be opened from a customer's phone. */
-function isPrivateAddress(url: string): boolean {
+export function isPrivateAddress(url: string): boolean {
   try {
     const host = new URL(url).hostname;
     return (
