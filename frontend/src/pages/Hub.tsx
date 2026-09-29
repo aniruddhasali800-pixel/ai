@@ -17,7 +17,6 @@ import {
   QrCode,
   Receipt,
   ScrollText,
-  ScanLine,
   Settings,
   ShieldCheck,
   Smartphone,
@@ -282,7 +281,6 @@ export function Hub() {
           <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { to: '/app', label: 'Live dashboard', icon: LayoutGrid, perm: 'orders:read' },
-              { to: '/app/scan', label: 'Master scanner', icon: ScanLine, perm: 'orders:read' },
               { to: '/app/orders', label: 'All orders', icon: ClipboardList, perm: 'orders:read' },
               { to: '/app/tables', label: 'Tables and QR cards', icon: Store, perm: 'tables:read' },
               { to: '/app/menu', label: 'Menu and pricing', icon: MenuIcon, perm: 'menu:read' },

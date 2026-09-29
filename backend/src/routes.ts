@@ -18,7 +18,6 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { reportsRouter } from './modules/reports/reports.routes';
 import { auditRouter } from './modules/audit/audit.routes';
 import { integrationsRouter } from './modules/integrations/integrations.routes';
-import { scanRouter } from './modules/scan/scan.routes';
 
 export const apiRouter = Router();
 
@@ -44,4 +43,3 @@ apiRouter.use('/notifications', notificationsRouter);
 apiRouter.use('/reports', reportsRouter);
 apiRouter.use('/audit', auditRouter);
 apiRouter.use('/integrations', integrationsRouter);
-apiRouter.use('/scan', scanRouter);

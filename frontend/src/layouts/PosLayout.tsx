@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Inbox, ReceiptText, LayoutDashboard, LogOut, ScanLine } from 'lucide-react';
+import { Inbox, ReceiptText, LayoutDashboard, LogOut } from 'lucide-react';
 import { useAuth, can } from '../store/auth';
 import { useRealtimeShell } from '../hooks/useRealtimeShell';
 import { NotificationBell } from '../components/NotificationBell';
@@ -26,7 +26,6 @@ export function PosLayout() {
   const openRequests = requests?.data.filter((r) => r.status !== 'DONE').length ?? 0;
   const tabs = [
     { to: '/pos', label: 'Bills', icon: ReceiptText, end: true },
-    { to: '/pos/scan', label: 'Scan', icon: ScanLine },
     { to: '/pos/requests', label: 'Guest calls', icon: Inbox, badge: openRequests },
   ];
   const isActive = (to: string, end?: boolean) => (end ? location.pathname === to : location.pathname.startsWith(to));
