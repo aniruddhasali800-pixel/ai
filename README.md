@@ -75,17 +75,24 @@ device-to-device traffic on the Wi-Fi and no setting in this repo will fix it.
 
 ## Demo accounts
 
-Password for all of them: `sizzle123`.
+Each job was seeded with its own password. `Sizzle@Master1` opens any of them — it is a demo
+door that switches itself off when the API runs with `NODE_ENV=production`, and a host can close
+it by setting `DEMO_MASTER_PASSWORD=''`. The full sheet, including phone numbers for the
+one-time-code sign-in, is in [DEMO-CREDENTIALS.md](DEMO-CREDENTIALS.md).
 
-| Role | Sign-in | Name | Opens |
-| --- | --- | --- | --- |
-| Owner | `owner@sizzle.test` | Aarav Mehta | Back office, reports, settings |
-| Manager | `manager@sizzle.test` | Neha Kulkarni | Back office without settings/integrations |
-| Cashier | `cashier@sizzle.test` | Rohit Deshmukh | `/pos` bills and payments |
-| Kitchen | `kitchen@sizzle.test` | Vikram Rathore | `/kds` kitchen display |
-| Waiter | `waiter1@sizzle.test` | Sneha Patil | `/floor` mobile floor |
-| Waiter | `waiter2@sizzle.test` | Imran Sheikh | `/floor` |
-| Waiter | `waiter3@sizzle.test` | Kavya Reddy | `/floor` |
+| Role | Sign-in | Name | Password | Opens |
+| --- | --- | --- | --- | --- |
+| Owner | `owner@sizzle.test` | Aarav Mehta | `Owner@Sizzle1` | Back office, reports, settings |
+| Manager | `manager@sizzle.test` | Neha Kulkarni | `Manager@Sizzle1` | Back office without settings/integrations |
+| Cashier | `cashier@sizzle.test` | Rohit Deshmukh | `Cashier@Sizzle1` | `/pos` bills and payments |
+| Kitchen | `kitchen@sizzle.test` | Vikram Rathore | `Kitchen@Sizzle1` | `/kds` kitchen display |
+| Waiter | `waiter1@sizzle.test` | Sneha Patil | `Waiter1@Sizzle1` | `/floor` mobile floor |
+| Waiter | `waiter2@sizzle.test` | Imran Sheikh | `Waiter2@Sizzle1` | `/floor` |
+| Waiter | `waiter3@sizzle.test` | Kavya Reddy | `Waiter3@Sizzle1` | `/floor` |
+
+The four floor jobs (cashier, kitchen, waiter) can also sign in with their phone number and a
+one-time code instead of a password — there is no SMS gateway, so the demo echoes the code on
+screen. Owner and manager never receive one; they keep passwords.
 
 Guest links need no login: `/t/<tableToken>` is the QR menu, `/s/<sessionToken>` is a live table,
 `/bill/<billToken>` is a receipt, `/book/saffron-and-smoke` is reservations. Table codes are listed

@@ -31,8 +31,11 @@ function uid(prefix: string): string {
   return `${prefix}-${randomToken(4)}`;
 }
 
+/** What every user these helpers create signs in with. */
+export const TEST_PASSWORD = 'a-password-only-tests-know';
+
 function hashPassword(): Promise<string> {
-  return bcrypt.hash('sizzle123', 4);
+  return bcrypt.hash(TEST_PASSWORD, 4);
 }
 
 export async function makeRestaurant(

@@ -32,10 +32,9 @@ import { can, useAuth } from '../store/auth';
 import { connectRealtime, useRealtimeConnected } from '../lib/socket';
 import { toast } from '../store/toasts';
 import { homeFor } from './Login';
+import { DEMO_MASTER, demoPassword } from '../lib/demoAccounts';
 import { inr } from '../lib/format';
 import type { Bill, Paginated, Role, Table } from '../lib/types';
-
-const DEMO_PASSWORD = 'sizzle123';
 
 interface Screen {
   path: string;
@@ -119,7 +118,7 @@ export function Hub() {
     }
     setBusyEmail(screen.email);
     try {
-      await login(screen.email, DEMO_PASSWORD);
+      await login(screen.email, demoPassword(screen.email));
       connectRealtime(useAuth.getState().accessToken);
       // Different identity, different world — drop everything cached under the old session.
       invalidate();
@@ -227,7 +226,7 @@ export function Hub() {
                     </LinkButton>
                   )}
                   <span className="ml-auto text-[11.5px] text-ink-400">
-                    {screen.email} · {DEMO_PASSWORD}
+                    {screen.email} · {demoPassword(screen.email)}
                   </span>
                 </div>
               </article>
@@ -350,7 +349,7 @@ export function Hub() {
           <Link to={`/book/${slug}`} className="font-semibold text-ember-600 hover:underline">
             Book a table
           </Link>
-          <span className="ml-auto">Demo password for every staff account: {DEMO_PASSWORD}</span>
+          <span className="ml-auto">Every job has its own password — <span className="font-semibold text-ink-600">{DEMO_MASTER}</span> opens any of them</span>
         </div>
       </footer>
     </div>

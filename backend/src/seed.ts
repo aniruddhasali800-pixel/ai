@@ -6,7 +6,7 @@
  */
 import { Types } from 'mongoose';
 import { connectDb, disconnectDb } from './config/db';
-import { env } from './config/env';
+import { env, DEMO_MASTER_PASSWORD } from './config/env';
 import {
   AddonModel,
   AuditLogModel,
@@ -39,7 +39,22 @@ import { round2, roundToRupee } from './utils/money';
 import { dateKey, randomToken } from './utils/tokens';
 import type { InventoryUnit, OrderSource, OrderStatus, Station } from './types/constants';
 
-const PASSWORD = 'sizzle123';
+/**
+ * One password per job, so signing in as the cashier really is the cashier and a demo of the
+ * approve queue cannot be staged from an account that already holds the till. They are printed
+ * on the login screen and live in DEMO-CREDENTIALS.md — this is a tenant with no real guests,
+ * no real money and no real kitchen behind it. The master password that opens all of them is
+ * the config default, not a value seeded here.
+ */
+const PASSWORDS: Record<string, string> = {
+  OWNER: 'Owner@Sizzle1',
+  MANAGER: 'Manager@Sizzle1',
+  CASHIER: 'Cashier@Sizzle1',
+  KITCHEN: 'Kitchen@Sizzle1',
+  WAITER1: 'Waiter1@Sizzle1',
+  WAITER2: 'Waiter2@Sizzle1',
+  WAITER3: 'Waiter3@Sizzle1',
+};
 
 let seedState = 20260927;
 function rnd(): number {
@@ -172,26 +187,33 @@ export async function seedDemoData(fresh = false): Promise<void> {
   const rid = String(restaurant._id);
 
   // ── Staff ─────────────────────────────────────────────────────────────────
-  const passwordHash = await hashPassword(PASSWORD);
-  const staffSpec: { role: 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER'; name: string; email: string; phone: string }[] = [
-    { role: 'OWNER', name: 'Aarav Mehta', email: 'owner@sizzle.test', phone: '+91 98200 11001' },
-    { role: 'MANAGER', name: 'Neha Kulkarni', email: 'manager@sizzle.test', phone: '+91 98200 11002' },
-    { role: 'CASHIER', name: 'Rohit Deshmukh', email: 'cashier@sizzle.test', phone: '+91 98200 11003' },
-    { role: 'KITCHEN', name: 'Vikram Rathore', email: 'kitchen@sizzle.test', phone: '+91 98200 11004' },
-    { role: 'WAITER', name: 'Sneha Patil', email: 'waiter1@sizzle.test', phone: '+91 98200 11005' },
-    { role: 'WAITER', name: 'Imran Sheikh', email: 'waiter2@sizzle.test', phone: '+91 98200 11006' },
-    { role: 'WAITER', name: 'Kavya Reddy', email: 'waiter3@sizzle.test', phone: '+91 98200 11007' },
+  const staffSpec: {
+    role: 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
+    name: string;
+    email: string;
+    phone: string;
+    key: keyof typeof PASSWORDS;
+  }[] = [
+    { role: 'OWNER', name: 'Aarav Mehta', email: 'owner@sizzle.test', phone: '+91 98200 11001', key: 'OWNER' },
+    { role: 'MANAGER', name: 'Neha Kulkarni', email: 'manager@sizzle.test', phone: '+91 98200 11002', key: 'MANAGER' },
+    { role: 'CASHIER', name: 'Rohit Deshmukh', email: 'cashier@sizzle.test', phone: '+91 98200 11003', key: 'CASHIER' },
+    { role: 'KITCHEN', name: 'Vikram Rathore', email: 'kitchen@sizzle.test', phone: '+91 98200 11004', key: 'KITCHEN' },
+    { role: 'WAITER', name: 'Sneha Patil', email: 'waiter1@sizzle.test', phone: '+91 98200 11005', key: 'WAITER1' },
+    { role: 'WAITER', name: 'Imran Sheikh', email: 'waiter2@sizzle.test', phone: '+91 98200 11006', key: 'WAITER2' },
+    { role: 'WAITER', name: 'Kavya Reddy', email: 'waiter3@sizzle.test', phone: '+91 98200 11007', key: 'WAITER3' },
   ];
   const staff = await UserModel.insertMany(
-    staffSpec.map((s) => ({
-      _id: s.role === 'OWNER' ? ownerId : new Types.ObjectId(),
-      restaurantId: restaurant._id,
-      role: s.role,
-      name: s.name,
-      email: s.email,
-      phone: s.phone,
-      passwordHash,
-    })),
+    await Promise.all(
+      staffSpec.map(async (s) => ({
+        _id: s.role === 'OWNER' ? ownerId : new Types.ObjectId(),
+        restaurantId: restaurant._id,
+        role: s.role,
+        name: s.name,
+        email: s.email,
+        phone: s.phone,
+        passwordHash: await hashPassword(PASSWORDS[s.key]),
+      })),
+    ),
   );
   const userByRole = (role: string, index = 0) => staff.filter((u) => u.role === role)[index];
   const owner = userByRole('OWNER');
@@ -881,14 +903,8 @@ export async function seedDemoData(fresh = false): Promise<void> {
   console.log(`
   Sizzle demo data ready — Saffron & Smoke (${rid})
 
-  Staff logins (password: ${PASSWORD})
-    owner@sizzle.test      Aarav Mehta     Owner
-    manager@sizzle.test    Neha Kulkarni   Manager
-    cashier@sizzle.test    Rohit Deshmukh  Cashier
-    kitchen@sizzle.test    Vikram Rathore  Kitchen
-    waiter1@sizzle.test    Sneha Patil     Waiter
-    waiter2@sizzle.test    Imran Sheikh    Waiter
-    waiter3@sizzle.test    Kavya Reddy     Waiter
+  Staff logins — one password per job, or ${DEMO_MASTER_PASSWORD || 'no master on this host'} for any of them
+${staffSpec.map((s) => `    ${s.email.padEnd(22)} ${s.name.padEnd(14)} ${s.role.padEnd(8)} ${PASSWORDS[s.key]}`).join('\n')}
 
   Floor right now: ${liveTables.map((t) => `${t.number}:${t.status}`).join('  ')}
   Menu: ${products.length} dishes · ${categories.length} categories

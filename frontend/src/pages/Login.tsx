@@ -6,6 +6,7 @@ import { Button, Field, Input, SegmentedControl } from '../components/ui';
 import { useAuth } from '../store/auth';
 import { connectRealtime } from '../lib/socket';
 import { errMsg, http } from '../lib/api';
+import { DEMO_MASTER, demoPassword } from '../lib/demoAccounts';
 import type { Role } from '../lib/types';
 
 const DEMO: { role: Role; label: string; email: string; icon: typeof ChefHat; blurb: string }[] = [
@@ -21,7 +22,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<'password' | 'code'>('password');
   const [identifier, setIdentifier] = useState('owner@sizzle.test');
-  const [password, setPassword] = useState('sizzle123');
+  const [password, setPassword] = useState(demoPassword('owner@sizzle.test'));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,11 +52,11 @@ export function LoginPage() {
   async function quick(email: string) {
     setMode('password');
     setIdentifier(email);
-    setPassword('sizzle123');
+    setPassword(demoPassword(email));
     setBusy(true);
     setError(null);
     try {
-      await login(email, 'sizzle123');
+      await login(email, demoPassword(email));
       await finish();
     } catch (err) {
       setError(errMsg(err, 'Could not sign in'));
@@ -162,7 +163,11 @@ export function LoginPage() {
                 ))}
               </div>
 
-              <p className="mt-3 text-[11.5px] text-ink-400">Every demo account uses password <span className="font-semibold text-ink-500">sizzle123</span>.</p>
+              <p className="mt-3 text-[11.5px] leading-relaxed text-ink-400">
+                Each job was seeded with its own password — the list is in{' '}
+                <span className="font-semibold text-ink-500">DEMO-CREDENTIALS.md</span>. Tapping a tile fills it in for
+                you, or use <span className="font-semibold text-ink-500">{DEMO_MASTER}</span> to open any of them.
+              </p>
             </>
           )}
 

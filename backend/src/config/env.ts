@@ -59,6 +59,9 @@ const schema = z.object({
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
   UPLOAD_DIR: z.string().default('uploads'),
   STATIC_DIR: z.string().trim().optional(),
+  // One password that opens any staff account, so this demo can be walked screen by screen
+  // without a list kept beside the keyboard. Set it to an empty string to switch the door off.
+  DEMO_MASTER_PASSWORD: z.string().default('Sizzle@Master1'),
   // A virgin database gets the demo tenant loaded into it, which is the only way a
   // hosted instance has anything to show. Set AUTO_SEED=false for a clean install.
   AUTO_SEED: z
@@ -97,6 +100,14 @@ export const env = {
   isProd: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
 };
+
+/**
+ * One password that opens every active staff account, so the demo can be walked through from
+ * the owner's reports to the pass without a list kept beside the keyboard. It is a deliberate
+ * hole in a build that has no real money or guest data behind it, so it closes by itself the
+ * moment the API runs in production, and closes on any host that sets the variable to blank.
+ */
+export const DEMO_MASTER_PASSWORD = env.isProd ? '' : env.DEMO_MASTER_PASSWORD;
 
 /**
  * Origins allowed on the HTTP and socket handshakes: whatever the host lists plus this

