@@ -6,6 +6,7 @@ import { KdsLayout } from './layouts/KdsLayout';
 import { FloorLayout } from './layouts/FloorLayout';
 import { PosLayout } from './layouts/PosLayout';
 import { Spinner } from './components/ui';
+import { Toaster } from './components/Toaster';
 
 const Hub = lazy(() => import('./pages/Hub').then((m) => ({ default: m.Hub })));
 const RegisterPage = lazy(() => import('./pages/Register').then((m) => ({ default: m.RegisterPage })));
@@ -99,6 +100,8 @@ export function App() {
         <Route path="/" element={<Hub />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
+      {/* Every screen raises its notices here — the layouts are too busy to carry them. */}
+      <Toaster />
     </Suspense>
   );
 }
