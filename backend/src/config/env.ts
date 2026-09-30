@@ -101,11 +101,15 @@ export const env = {
   isTest: parsed.data.NODE_ENV === 'test',
 };
 
+/** The tenant `npm run seed` loads, and the only one the demo master password opens. */
+export const DEMO_TENANT_SLUG = 'saffron-and-smoke';
+
 /**
- * One password that opens every active staff account, so the demo can be walked through from
- * the owner's reports to the pass without a list kept beside the keyboard. It is a deliberate
- * hole in a build that has no real money or guest data behind it, so it closes by itself the
- * moment the API runs in production, and closes on any host that sets the variable to blank.
+ * One password that opens every active account in the demo tenant, so the walkthrough can run from
+ * the owner's reports to the pass without a list kept beside the keyboard. It is a deliberate hole
+ * in a build that has no real money or guest data behind it, so it closes by itself the moment the
+ * API runs in production, closes on any host that sets the variable to blank, and reaches no
+ * restaurant that onboarded itself for real.
  */
 export const DEMO_MASTER_PASSWORD = env.isProd ? '' : env.DEMO_MASTER_PASSWORD;
 

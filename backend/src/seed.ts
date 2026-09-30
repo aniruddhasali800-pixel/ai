@@ -6,7 +6,7 @@
  */
 import { Types } from 'mongoose';
 import { connectDb, disconnectDb } from './config/db';
-import { env, DEMO_MASTER_PASSWORD } from './config/env';
+import { env, DEMO_MASTER_PASSWORD, DEMO_TENANT_SLUG } from './config/env';
 import {
   AddonModel,
   AuditLogModel,
@@ -137,7 +137,7 @@ export async function seedDemoData(fresh = false): Promise<void> {
     console.log(`[seed] cleared ${collections.reduce((s, r) => s + (r.deletedCount ?? 0), 0)} documents`);
   }
 
-  const already = await RestaurantModel.findOne({ slug: 'saffron-and-smoke' }).lean();
+  const already = await RestaurantModel.findOne({ slug: DEMO_TENANT_SLUG }).lean();
   if (already) {
     console.log('[seed] Saffron & Smoke already exists — nothing to do. Use --fresh to rebuild.');
     return;
@@ -150,7 +150,7 @@ export async function seedDemoData(fresh = false): Promise<void> {
     _id: restaurantId,
     ownerId,
     name: 'Saffron & Smoke',
-    slug: 'saffron-and-smoke',
+    slug: DEMO_TENANT_SLUG,
     phone: '+91 20 4123 8890',
     email: 'hello@saffronandsmoke.in',
     address: {
@@ -914,7 +914,7 @@ ${staffSpec.map((s) => `    ${s.email.padEnd(22)} ${s.name.padEnd(14)} ${s.role.
   Customer QR — table G1:
     ${env.PUBLIC_BASE_URL}/t/${table('G1').qrToken}
   Public branding API:
-    ${env.PUBLIC_BASE_URL}/api/public/restaurant/saffron-and-smoke
+    ${env.PUBLIC_BASE_URL}/api/public/restaurant/${DEMO_TENANT_SLUG}
 `);
 }
 

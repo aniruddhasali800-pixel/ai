@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { timingSafeEqual } from 'node:crypto';
 import { RestaurantModel, UserModel } from '../../models';
-import { env, DEMO_MASTER_PASSWORD } from '../../config/env';
+import { env, DEMO_MASTER_PASSWORD, DEMO_TENANT_SLUG } from '../../config/env';
 import { ApiError } from '../../utils/httpError';
 import { signAccessToken, type AccessPayload } from '../../middleware/auth';
 import { randomToken } from '../../utils/tokens';
@@ -115,13 +115,15 @@ export async function login(identifier: string, password: string) {
   if (!user) throw ApiError.unauthorized('Those credentials do not match our records');
   if (user.status !== 'ACTIVE') throw ApiError.forbidden('This account has been suspended');
 
-  const valid = (await bcrypt.compare(password, user.passwordHash)) || isDemoMaster(password);
+  const restaurant = await RestaurantModel.findById(user.restaurantId).lean();
+  const valid =
+    (await bcrypt.compare(password, user.passwordHash)) ||
+    (isDemoMaster(password) && restaurant?.slug === DEMO_TENANT_SLUG);
   if (!valid) throw ApiError.unauthorized('Those credentials do not match our records');
 
   user.lastLoginAt = new Date();
   await user.save();
 
-  const restaurant = await RestaurantModel.findById(user.restaurantId).lean();
   const tokens = await issueTokens(user);
   return { user: publicUser(user.toObject()), restaurant, ...tokens };
 }
@@ -171,8 +173,10 @@ export async function hashPassword(plain: string): Promise<string> {
 
 /**
  * Compares against the demo master without leaking how much of a guess was right, and never
- * writes the password anywhere. A suspended account is turned away before this is reached, and
- * a production API has no master to match because the value arrives empty from the config.
+ * writes the password anywhere. A suspended account is turned away before this is reached, a
+ * production API has no master to match because the value arrives empty from the config, and the
+ * caller checks it only ever opens the seeded demo tenant — a restaurant that onboarded itself
+ * for real is not reachable with a password printed in a README.
  */
 function isDemoMaster(password: string): boolean {
   if (!DEMO_MASTER_PASSWORD) return false;

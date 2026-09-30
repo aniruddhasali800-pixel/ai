@@ -13,12 +13,16 @@ Local: <http://localhost:5173> · API: <http://localhost:4000>
 Sizzle@Master1
 ```
 
-Opens any of the seven accounts below, no matter which job it is. It exists so you can walk from
-the owner's reports to the kitchen pass without keeping a list beside the keyboard.
+Opens any active account of this demo tenant, whichever job it is — the seven below and anyone hired
+through the apply page. It exists so you can walk from the owner's reports to the kitchen pass
+without keeping a list beside the keyboard. A restaurant that onboarded itself at */register* is a
+different tenant, and this password gets you nowhere near it.
 
 - **Turned off in production.** When the API runs with `NODE_ENV=production` the value arrives
   empty from the config and matches nothing. Any host can also switch it off without a code change
-  by setting `DEMO_MASTER_PASSWORD=` (blank) in its environment.
+  by setting `DEMO_MASTER_PASSWORD=` (blank) in its environment. The Render service this demo runs
+  on leaves `NODE_ENV` at its default, so on `ai-1-hsus.onrender.com` the door is open — as intended
+  for a walkthrough, and the first thing to close before any real restaurant signs in.
 - A suspended account is refused before the master is ever compared, so the door does not
   resurrect a deactivated staff login.
 - It is never written to a log, and the sign-in failure message is the same wording as any other
