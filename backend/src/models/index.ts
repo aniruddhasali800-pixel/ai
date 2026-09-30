@@ -1,4 +1,6 @@
 export { UserModel, type User } from './User';
+export { StaffApplicationModel, type StaffApplication } from './StaffApplication';
+export { LoginCodeModel, type LoginCode } from './LoginCode';
 export { RestaurantModel, type Restaurant } from './Restaurant';
 export { TableModel, type Table } from './Table';
 export { TableSessionModel, type TableSession } from './TableSession';

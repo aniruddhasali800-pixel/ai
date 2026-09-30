@@ -13,20 +13,13 @@ const INK = [28, 25, 23];
 const EMBER = [234, 88, 12];
 const SAFFRON = [250, 204, 21];
 const EMBER_SOFT = [253, 186, 116];
-const CREAM = [255, 237, 213];
 
-/**
- * The two staff installs are one family, told apart by turning it inside out:
- * the owner keeps the charcoal house with the ember flame, the manager gets the
- * flame as the house and the ink as the mark.
- */
-const SKINS = {
-  owner: { tile: INK, art: [EMBER, SAFFRON, EMBER_SOFT] },
-  manager: { tile: EMBER, art: [INK, CREAM, SAFFRON] },
-};
+/** The house is charcoal, the flame is the ember family. */
+const TILE = INK;
+const ART_COLORS = [EMBER, SAFFRON, EMBER_SOFT];
 
 /** The mark, drawn on a 512 grid, back to front. Each shape takes the colour of the same
- *  index in the skin. `cubics` entries are [c1x,c1y,c2x,c2y,x,y]. */
+ *  index in ART_COLORS. `cubics` entries are [c1x,c1y,c2x,c2y,x,y]. */
 const ART = [
   {
     start: [318, 116],
@@ -106,13 +99,13 @@ const VARIANTS = {
   maskable: { scale: 0.72, dx: 0, dy: 4, radius: 0 },
 };
 
-function svgIcon(size, variant, skin) {
+function svgIcon(size, variant) {
   const v = VARIANTS[variant];
-  const tile = `#${SKINS[skin].tile.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+  const tile = `#${TILE.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
   const bg = v.radius
     ? `<rect width="512" height="512" rx="${(512 * v.radius).toFixed(0)}" fill="${tile}"/>`
     : `<rect width="512" height="512" fill="${tile}"/>`;
-  const body = ART.map((s, i) => `<path fill="rgb(${SKINS[skin].art[i].join(',')})" d="${shapePath(s, v.scale, v.dx, v.dy)}"/>`).join('');
+  const body = ART.map((s, i) => `<path fill="rgb(${ART_COLORS[i].join(',')})" d="${shapePath(s, v.scale, v.dx, v.dy)}"/>`).join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}" role="img" aria-label="Sizzle">${bg}${body}</svg>`;
 }
 
@@ -162,17 +155,16 @@ function tileAlpha(size, radius, y) {
 
 const over = (dst, src, a) => (a <= 0 ? dst : a >= 1 ? src : dst.map((v, i) => Math.round(v + (src[i] - v) * a)));
 
-function render(size, variant, skin) {
+function render(size, variant) {
   const v = VARIANTS[variant];
-  const { tile, art } = SKINS[skin];
   const k = size / 512;
-  const shapes = ART.map((s, i) => ({ color: art[i], hits: coverage(outline(s, v.scale, v.dx, v.dy).map(([x, y]) => [x * k, y * k]), size, 4) }));
+  const shapes = ART.map((s, i) => ({ color: ART_COLORS[i], hits: coverage(outline(s, v.scale, v.dx, v.dy).map(([x, y]) => [x * k, y * k]), size, 4) }));
   const rows = [];
   for (let y = 0; y < size; y += 1) {
     const row = Buffer.alloc(size * 4 + 1);
     const tileAlphaAt = tileAlpha(size, v.radius * size, y);
     for (let x = 0; x < size; x += 1) {
-      let px = tile;
+      let px = TILE;
       for (const s of shapes) px = over(px, s.color, s.hits[y * size + x]);
       const at = x * 4 + 1;
       row[at] = px[0];
@@ -221,21 +213,15 @@ function png(size, rows) {
 }
 
 mkdirSync(outDir, { recursive: true });
-// The owner install is the brand itself, so it reuses the unsuffixed icons; only the
-// manager needs its inverted set.
-for (const [name, size, variant, skin] of [
-  ['icon-192.png', 192, 'plain', 'owner'],
-  ['icon-512.png', 512, 'plain', 'owner'],
-  ['maskable-512.png', 512, 'maskable', 'owner'],
-  ['apple-touch-icon.png', 180, 'maskable', 'owner'],
-  ['manager-192.png', 192, 'plain', 'manager'],
-  ['manager-512.png', 512, 'plain', 'manager'],
-  ['manager-maskable-512.png', 512, 'maskable', 'manager'],
-  ['manager-apple-touch-icon.png', 180, 'maskable', 'manager'],
+// One staff install, one guest install: both are the brand, so every file comes from one skin.
+for (const [name, size, variant] of [
+  ['icon-192.png', 192, 'plain'],
+  ['icon-512.png', 512, 'plain'],
+  ['maskable-512.png', 512, 'maskable'],
+  ['apple-touch-icon.png', 180, 'maskable'],
 ]) {
-  writeFileSync(join(outDir, name), render(size, variant, skin));
+  writeFileSync(join(outDir, name), render(size, variant));
 }
-writeFileSync(join(outDir, 'favicon.svg'), svgIcon(64, 'plain', 'owner'));
-writeFileSync(join(outDir, 'icon.svg'), svgIcon(512, 'maskable', 'owner'));
-writeFileSync(join(outDir, 'manager.svg'), svgIcon(64, 'plain', 'manager'));
+writeFileSync(join(outDir, 'favicon.svg'), svgIcon(64, 'plain'));
+writeFileSync(join(outDir, 'icon.svg'), svgIcon(512, 'maskable'));
 console.log('icons written to public/icons');

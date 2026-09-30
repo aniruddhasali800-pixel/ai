@@ -1,4 +1,5 @@
 import { Schema, model, type InferSchemaType } from 'mongoose';
+import { FLOOR_ROLES } from '../types/constants';
 
 const restaurantSchema = new Schema(
   {
@@ -39,6 +40,11 @@ const restaurantSchema = new Schema(
       bookingReminderMinutes: { type: Number, default: 60 },
       allowWaiterCash: { type: Boolean, default: true },
       deliveryEnabled: { type: Boolean, default: true },
+      /** Which jobs the sticker's "ask to work here" form offers. Floor jobs only, by design. */
+      openRoles: {
+        type: [{ type: String, enum: FLOOR_ROLES }],
+        default: [...FLOOR_ROLES],
+      },
     },
   },
   { timestamps: true },

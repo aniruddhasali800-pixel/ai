@@ -25,4 +25,7 @@ export class ApiError extends Error {
   static conflict(message = 'Conflicting request', details?: unknown) {
     return new ApiError(409, message, 'CONFLICT', details);
   }
+  static tooManyRequests(message = 'Slow down for a moment') {
+    return new ApiError(429, message, 'RATE_LIMITED');
+  }
 }

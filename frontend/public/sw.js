@@ -1,21 +1,15 @@
 // Hand-rolled service worker: no Workbox, no build plugin, one versioned cache.
-const CACHE = 'sizzle-v2';
+const CACHE = 'sizzle-v3';
 const SHELL = [
   '/',
   '/eat',
-  '/owner.html',
-  '/manager.html',
+  '/staff.html',
   '/manifest.webmanifest',
-  '/manifest-owner.webmanifest',
-  '/manifest-manager.webmanifest',
+  '/manifest-staff.webmanifest',
   '/icons/favicon.svg',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/maskable-512.png',
-  '/icons/manager.svg',
-  '/icons/manager-192.png',
-  '/icons/manager-512.png',
-  '/icons/manager-maskable-512.png',
 ];
 
 // The shell is precached so an installed app (or a scanned table QR) opens with no signal.

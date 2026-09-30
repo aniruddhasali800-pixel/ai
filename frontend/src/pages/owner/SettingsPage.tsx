@@ -3,7 +3,8 @@ import { Clock, Link2, Printer, Save, ShieldCheck } from 'lucide-react';
 import { http, errMsg } from '../../lib/api';
 import { useQuery } from '../../lib/query';
 import { useAuth, can } from '../../store/auth';
-import type { Restaurant } from '../../lib/types';
+import type { Restaurant, Role } from '../../lib/types';
+import { FLOOR_JOBS, JOB_META } from '../../lib/jobs';
 import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from '../../components/ui';
 import { ImagePicker } from '../../components/ImagePicker';
 import { toast } from '../../store/toasts';
@@ -29,6 +30,8 @@ export function SettingsPage() {
     acceptingOrders: true, autoAcceptOrders: false, billFooterNote: '', bookingEnabled: true,
     bookingSlotMinutes: 30, bookingDurationMinutes: 90, bookingReminderMinutes: 60, allowWaiterCash: false, deliveryEnabled: true,
   };
+  // Nothing saved yet means every floor job is open, which is what the API answers too.
+  const openRoles: Role[] = s.openRoles?.length ? s.openRoles : FLOOR_JOBS;
 
   function set<K extends keyof Restaurant>(key: K, value: Restaurant[K]) {
     setData((d) => (d ? { ...d, [key]: value } : d));
@@ -178,7 +181,30 @@ export function SettingsPage() {
           </div>
         </Card>
 
-        {can(user?.role, 'settings:write') && <StaffQrCard />}
+        {can(user?.role, 'settings:write') && (
+          <Card title="Hiring" subtitle="Which jobs the staff code offers to a walk-in" className="lg:col-span-2">
+            <div className="space-y-3.5 p-4">
+              {FLOOR_JOBS.map((job) => {
+                const open = openRoles.includes(job);
+                return (
+                  <SettingRow
+                    key={job}
+                    title={JOB_META[job].label}
+                    body={JOB_META[job].blurb}
+                    control={<Toggle checked={open} onChange={(v) => setSetting('openRoles', v ? [...openRoles, job] : openRoles.filter((r) => r !== job))} />}
+                  />
+                );
+              })}
+              <p className="rounded-xl bg-ink-50 px-3.5 py-2.5 text-[12px] leading-relaxed text-ink-500">
+                A closed job disappears from the application form, so nobody asks for work you are not offering. An
+                applicant signs nothing and chooses nothing beyond the job — their account only exists once the manager
+                accepts the application, and a manager account is yours alone to hand out.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {can(user?.role, 'settings:write') && <StaffQrCard slug={data.slug} />}
       </div>
 
       <div className="sticky bottom-4 flex flex-wrap items-center gap-3 rounded-2xl bg-ink-900 px-4 py-3 text-white shadow-xl">
@@ -198,89 +224,64 @@ export function SettingsPage() {
   );
 }
 
-/** One scanned code, one home-screen app. Both reach all five dashboards; the account decides which one opens. */
-const INSTALL_PAIRS = [
-  { key: 'owner', label: "Owner's phone", file: 'owner.html', accent: 'text-ink-900' },
-  { key: 'manager', label: "Manager's phone", file: 'manager.html', accent: 'text-ember-600' },
-] as const;
-
 const DASHBOARDS = ['Owner back office', 'Manager back office', 'Waiter floor', 'Kitchen display', 'Cashier counter'];
 
-type InstallQr = { url: string; dataUrl: string };
-
-function StaffQrCard() {
-  const { data, loading } = useQuery<Record<(typeof INSTALL_PAIRS)[number]['key'], InstallQr>>(
-    'restaurants:staff-qr',
-    '/restaurants/staff-qr',
-  );
+function StaffQrCard({ slug }: { slug: string }) {
+  const { data, loading } = useQuery<{ url: string; dataUrl: string }>('restaurants:staff-qr', '/restaurants/staff-qr');
 
   return (
-    <Card title="Staff app — Restaurant OS" subtitle="Installs the whole back office, not the menu" className="lg:col-span-2">
-      <div className="space-y-4 p-4">
-        <p className="text-[13px] leading-relaxed text-ink-600">
-          These two codes install the working app on a phone: {DASHBOARDS.join(', ')}. Whichever screen opens is decided
-          by the account that signs in — the owner code and the manager code differ in the name and icon they put on the
-          home screen, so the two phones never look alike in a bag.
-        </p>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          {INSTALL_PAIRS.map((pair) => {
-            const qr = data?.[pair.key];
-            return (
-              <div key={pair.key} className="rounded-2xl bg-ink-50 p-4 ring-1 ring-ink-200">
-                <p className={`text-[13px] font-bold ${pair.accent}`}>{pair.label}</p>
-                <span className="mt-3 grid aspect-square place-items-center overflow-hidden rounded-xl bg-white ring-1 ring-ink-200">
-                  {qr ? (
-                    <img src={qr.dataUrl} alt={`Install Sizzle for the ${pair.key}`} className="h-full w-full object-contain p-2" />
-                  ) : (
-                    <span className={`text-[12px] text-ink-400 ${loading ? 'animate-pulse' : ''}`}>{loading ? 'Rendering…' : 'Unavailable'}</span>
-                  )}
-                </span>
-                <p className="mt-2.5 break-all font-mono text-[11px] text-ink-400">{qr?.url ?? `/${pair.file}`}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    icon={<Link2 size={13} />}
-                    disabled={!qr}
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(qr?.url ?? '');
-                      toast(`${pair.label} link copied`, 'success');
-                    }}
-                  >
-                    Copy link
-                  </Button>
-                  <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!qr} onClick={() => printInstallSticker(pair.label, pair.file, qr?.dataUrl)}>
-                    Print
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+    <Card title="Staff app — Restaurant OS" subtitle="One code for the whole team: it installs the working app, not the menu" className="lg:col-span-2">
+      <div className="flex flex-col items-center gap-5 p-4 sm:flex-row">
+        <span className="grid h-44 w-44 shrink-0 place-items-center overflow-hidden rounded-2xl bg-ink-50 ring-1 ring-ink-200">
+          {data ? (
+            <img src={data.dataUrl} alt={`Staff install code for ${slug}`} className="h-full w-full object-contain p-1.5" />
+          ) : (
+            <span className={`text-[12px] text-ink-400 ${loading ? 'animate-pulse' : ''}`}>{loading ? 'Rendering…' : 'Unavailable'}</span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <p className="text-[13px] leading-relaxed text-ink-600">
+            Print one and stick it by the time clock. Whoever scans it installs the same app and signs in with their own
+            account — {DASHBOARDS.join(', ')} — and the account decides which screen opens. Someone with no account yet
+            gets the job form on the same code, so a walk-in can apply for a waiter, kitchen or counter shift from their
+            own phone.
+          </p>
+          {data && <p className="break-all rounded-lg bg-ink-50 px-3 py-2 font-mono text-[12px] text-ink-500 ring-1 ring-ink-200">{data.url}</p>}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Link2 size={13} />}
+              disabled={!data}
+              onClick={() => {
+                void navigator.clipboard?.writeText(data?.url ?? '');
+                toast('Staff install link copied', 'success');
+              }}
+            >
+              Copy link
+            </Button>
+            <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!data} onClick={() => printInstallSticker(slug, data?.dataUrl)}>
+              Print sticker
+            </Button>
+          </div>
         </div>
-
-        <p className="text-[12px] leading-relaxed text-ink-500">
-          Scan it on the phone with the restaurant&apos;s own camera app — no store, no download. The browser then offers
-          <strong className="font-semibold text-ink-900"> Install app</strong>, and the dashboard opens full-screen from
-          the home screen afterwards.
-        </p>
       </div>
     </Card>
   );
 }
 
-function printInstallSticker(label: string, file: string, dataUrl?: string) {
+function printInstallSticker(slug: string, dataUrl?: string) {
   if (!dataUrl) return;
   const w = window.open('', '_blank');
   if (!w) return;
   w.document.write(
     `<div style="text-align:center;font-family:system-ui,sans-serif;padding:32px">` +
       `<p style="margin:0;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#78716c">Sizzle · staff app</p>` +
-      `<h2 style="margin:4px 0 18px;font-size:26px">${label}</h2>` +
+      `<h2 style="margin:4px 0 18px;font-size:26px">Team &amp; jobs</h2>` +
       `<img src="${dataUrl}" style="width:260px" onload="window.print()" />` +
       `<p style="margin:16px 0 0;font-size:15px;font-weight:600">Scan to install</p>` +
-      `<p style="margin:4px 0 0;font-size:12.5px;color:#78716c">Back office, floor, kitchen and counter — signed in with your own account.</p>` +
-      `<p style="margin:2px 0 0;font-size:11px;color:#a8a29e">${file}</p>` +
+      `<p style="margin:4px 0 0;font-size:12.5px;color:#78716c">Back office, floor, kitchen and counter — sign in with your own account.</p>` +
+      `<p style="margin:4px 0 0;font-size:12.5px;color:#78716c">No account yet? The same code takes you to the job form.</p>` +
     `</div>`,
   );
   w.document.close();

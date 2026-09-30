@@ -22,13 +22,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    // Three entries, three installable apps: guests get /, the owner and the manager
-    // each get a page that carries its own manifest and icon.
+    // Two entries, two installable apps: guests get /, the whole staff team shares
+    // /staff.html, which carries its own manifest and name on the home screen.
     rollupOptions: {
       input: {
         main: `${root}index.html`,
-        owner: `${root}owner.html`,
-        manager: `${root}manager.html`,
+        staff: `${root}staff.html`,
       },
     },
   },

@@ -1,6 +1,11 @@
 export const ROLES = ['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER'] as const;
 export type Role = (typeof ROLES)[number];
 
+/** Jobs a stranger may ask for on the sticker, and jobs that need a manager to exist already. */
+export const FLOOR_ROLES = ['WAITER', 'KITCHEN', 'CASHIER'] as const;
+/** Nobody hands these out but the owner, so a manager-approved hire can never grant authority. */
+export const OWNER_GRANT_ROLES: Role[] = ['MANAGER'];
+
 export const ORDER_STATUSES = [
   'PLACED',
   'ACCEPTED',

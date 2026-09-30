@@ -27,9 +27,10 @@ import {
   startAppCheckout,
 } from '../../services/customerApp.service';
 import { checkAvailability, createBooking } from '../../services/booking.service';
+import { openRolesFor, submitApplication } from '../../services/hiring.service';
 import { publicBillView, createBill } from '../../services/billing.service';
 import { notifyRoles } from '../../services/notification.service';
-import { REQUEST_TYPES } from '../../types/constants';
+import { FLOOR_ROLES, REQUEST_TYPES } from '../../types/constants';
 import { queryOf } from '../../utils/query';
 import type { Role } from '../../types/constants';
 
@@ -558,6 +559,46 @@ publicRouter.get(
       guests: q.guests,
     });
     res.json(result);
+  }),
+);
+
+/** What the job form on the sticker is allowed to offer, straight from the owner's settings. */
+publicRouter.get(
+  '/hiring/:slug',
+  asyncHandler(async (req, res) => {
+    const restaurant = await RestaurantModel.findOne({ slug: req.params.slug.toLowerCase() })
+      .select('name slug branding address.city settings.openRoles')
+      .lean();
+    if (!restaurant) throw ApiError.notFound('Restaurant not found');
+    res.json({
+      name: restaurant.name,
+      slug: restaurant.slug,
+      tagline: restaurant.branding?.tagline ?? '',
+      city: restaurant.address?.city ?? '',
+      openRoles: openRolesFor(restaurant),
+    });
+  }),
+);
+
+/**
+ * A walk-in asks for a shift. No account, no session, nothing trusted — the restaurant comes
+ * from the slug in the URL and the answer deliberately says nothing about whether this phone
+ * already works here.
+ */
+publicRouter.post(
+  '/applications/:slug',
+  publicWriteLimiter,
+  validate({
+    body: z.object({
+      name: z.string().min(2).max(80),
+      phone: z.string().min(8).max(20),
+      role: z.enum(FLOOR_ROLES),
+      note: z.string().max(300).optional(),
+    }),
+  }),
+  asyncHandler(async (req, res) => {
+    const result = await submitApplication(req.params.slug, req.body);
+    res.status(201).json(result);
   }),
 );
 

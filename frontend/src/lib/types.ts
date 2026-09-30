@@ -60,6 +60,8 @@ export interface RestaurantSettings {
   bookingReminderMinutes: number;
   allowWaiterCash: boolean;
   deliveryEnabled: boolean;
+  /** Jobs the sticker's "ask to work here" form is offering. */
+  openRoles?: Role[];
 }
 
 export interface Restaurant {
@@ -90,6 +92,20 @@ export interface User {
   status: 'ACTIVE' | 'SUSPENDED';
   lastLoginAt: string | null;
   createdAt: string;
+}
+
+/** A walk-in's ask from the sticker, exactly as it lands in the manager's queue. */
+export interface StaffApplication {
+  _id: string;
+  name: string;
+  phone: string;
+  role: Role;
+  note: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
+  decidedByName: string;
+  decidedAt: string | null;
+  userId: string | null;
 }
 
 export interface AuthResult {

@@ -36,6 +36,7 @@ const GuestMenu = lazy(() => import('./pages/guest/GuestMenu').then((m) => ({ de
 const GuestSession = lazy(() => import('./pages/guest/GuestSession').then((m) => ({ default: m.GuestSession })));
 const GuestBill = lazy(() => import('./pages/guest/GuestBill').then((m) => ({ default: m.GuestBill })));
 const PublicBooking = lazy(() => import('./pages/guest/PublicBooking').then((m) => ({ default: m.PublicBooking })));
+const ApplyJob = lazy(() => import('./pages/ApplyJob').then((m) => ({ default: m.ApplyJob })));
 
 const AppLanding = lazy(() => import('./pages/app/AppLanding').then((m) => ({ default: m.AppLanding })));
 const CustomerApp = lazy(() => import('./pages/app/CustomerApp').then((m) => ({ default: m.CustomerApp })));
@@ -49,9 +50,8 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 
-        {/* Two installable staff apps, each with its own icon, name and manifest */}
-        <Route path="/owner.html" element={<StaffInstall role="OWNER" />} />
-        <Route path="/manager.html" element={<StaffInstall role="MANAGER" />} />
+        {/* One installable app for the whole team; the account decides the screen */}
+        <Route path="/staff.html" element={<StaffInstall />} />
 
         {/* Back office — owner & manager */}
         <Route path="/app" element={<StaffLayout />}>
@@ -93,6 +93,8 @@ export function App() {
         <Route path="/s/:publicToken" element={<GuestSession />} />
         <Route path="/bill/:billToken" element={<GuestBill />} />
         <Route path="/book/:slug" element={<PublicBooking />} />
+        {/* A walk-in's side of the staff sticker: ask for a shift, no account needed */}
+        <Route path="/apply/:slug" element={<ApplyJob />} />
 
         <Route path="/" element={<Hub />} />
         <Route path="*" element={<NotFound />} />

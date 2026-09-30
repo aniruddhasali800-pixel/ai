@@ -10,11 +10,24 @@ interface AuthState {
   refreshToken: string | null;
   ready: boolean;
   login: (identifier: string, password: string) => Promise<void>;
+  /** The floor signs in with the phone they gave on the job form plus a code worth minutes. */
+  loginWithCode: (phone: string, code: string) => Promise<void>;
   register: (input: Record<string, unknown>) => Promise<void>;
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   setRestaurant: (restaurant: Restaurant) => void;
   logout: () => void;
   bootstrap: () => Promise<void>;
+}
+
+/** Any sign-in — password, code or a fresh restaurant — hands back the same shape. */
+function sessionOf(data: AuthResult) {
+  return {
+    user: data.user,
+    restaurant: data.restaurant ?? null,
+    accessToken: data.accessToken,
+    refreshToken: data.refreshToken,
+    ready: true,
+  };
 }
 
 export const useAuth = create<AuthState>()(
@@ -28,24 +41,17 @@ export const useAuth = create<AuthState>()(
 
       async login(identifier, password) {
         const { data } = await http.post<AuthResult>('/auth/login', { identifier, password });
-        set({
-          user: data.user,
-          restaurant: data.restaurant ?? null,
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-          ready: true,
-        });
+        set(sessionOf(data));
+      },
+
+      async loginWithCode(phone, code) {
+        const { data } = await http.post<AuthResult>('/auth/otp/verify', { phone, code });
+        set(sessionOf(data));
       },
 
       async register(input) {
         const { data } = await http.post<AuthResult>('/auth/register', input);
-        set({
-          user: data.user,
-          restaurant: data.restaurant ?? null,
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-          ready: true,
-        });
+        set(sessionOf(data));
       },
 
       setTokens(tokens) {

@@ -38,7 +38,7 @@ export function publicUser(user: Record<string, any>) {
   };
 }
 
-async function issueTokens(user: { _id: unknown; restaurantId: unknown; role: Role; name: string }) {
+export async function issueTokens(user: { _id: unknown; restaurantId: unknown; role: Role; name: string }) {
   const accessToken = signAccessToken({
     sub: String(user._id),
     rid: String(user.restaurantId),

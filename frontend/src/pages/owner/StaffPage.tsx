@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { KeyRound, Mail, Phone, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { KeyRound, Mail, Phone, ShieldCheck, UserPlus, Users, UserRoundPlus } from 'lucide-react';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
-import type { Role, User } from '../../lib/types';
+import type { Role, StaffApplication, User } from '../../lib/types';
+import { jobLabel } from '../../lib/jobs';
 import { dateTime, initials, timeAgo } from '../../lib/format';
 import { Button, Card, EmptyState, Field, Input, Modal, Pill, Select, Spinner } from '../../components/ui';
 import { can, useAuth } from '../../store/auth';
@@ -55,6 +56,8 @@ export function StaffPage() {
           </div>
         ))}
       </div>
+
+      <ApplicationsQueue />
 
       <Card
         title="Team"
@@ -112,6 +115,11 @@ export function StaffPage() {
 }
 
 function StaffModal({ user, onClose }: { user?: User; onClose: () => void }) {
+  const { user: me } = useAuth();
+  const isOwner = me?.role === 'OWNER';
+  // A manager runs the floor, so the jobs they can hand out are floor jobs. Manager is the
+  // owner's to grant — the same rule the API enforces, kept off the screen so nobody taps a 403.
+  const jobOptions = isOwner ? ROLES : ROLES.filter((r) => r.value !== 'MANAGER');
   const [form, setForm] = useState({
     name: user?.name ?? '',
     role: user?.role ?? ('WAITER' as Role),
@@ -124,7 +132,8 @@ function StaffModal({ user, onClose }: { user?: User; onClose: () => void }) {
 
   async function save() {
     if (form.name.trim().length < 2) { toast('Add a name', 'error'); return; }
-    if (!isEdit && form.password.length < 8) { toast('Pick a password of 8+ characters', 'error'); return; }
+    if (!isEdit && form.password.length > 0 && form.password.length < 8) { toast('That password is too short', 'error'); return; }
+    if (!isEdit && form.password.length === 0 && !form.phone.trim()) { toast('Give a phone number for code sign-in, or set a password', 'error'); return; }
     setBusy(true);
     try {
       if (isEdit) {
@@ -141,9 +150,9 @@ function StaffModal({ user, onClose }: { user?: User; onClose: () => void }) {
           role: form.role,
           email: form.email.trim() || undefined,
           phone: form.phone.trim() || undefined,
-          password: form.password,
+          password: form.password || undefined,
         });
-        toast(`${form.name} can now sign in`, 'success');
+        toast(`${form.name} can now sign in${form.password ? '' : ' with a code on that phone'}`, 'success');
       }
       invalidate('staff');
       onClose();
@@ -159,14 +168,14 @@ function StaffModal({ user, onClose }: { user?: User; onClose: () => void }) {
         </Field>
         <Field label="Role" className="sm:col-span-2">
           <Select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}>
-            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label} — {r.blurb}</option>)}
+            {jobOptions.map((r) => <option key={r.value} value={r.value}>{r.label} — {r.blurb}</option>)}
           </Select>
         </Field>
         <Field label="Email"><Input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} inputMode="email" /></Field>
         <Field label="Phone"><Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} inputMode="tel" /></Field>
         {!isEdit && (
-          <Field label="Temporary password" required className="sm:col-span-2" hint="They can change it from the sign-in screen">
-            <Input type="text" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="at least 8 characters" />
+          <Field label="Password" className="sm:col-span-2" hint="Leave it blank and they sign in with a one-time code on that phone number instead.">
+            <Input type="text" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="optional — at least 8 characters" />
           </Field>
         )}
       </div>
@@ -196,5 +205,97 @@ function PasswordModal({ user, onClose }: { user: User; onClose: () => void }) {
         <Input type="text" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus />
       </Field>
     </Modal>
+  );
+}
+
+/**
+ * Who has asked to work here. A walk-in's application arrives from the staff sticker with no
+ * account behind it, and accepting is the only thing that opens one — the phone they typed
+ * becomes the way they sign in, so there is no password to hand over at the door.
+ */
+function ApplicationsQueue() {
+  const { user } = useAuth();
+  const writable = can(user?.role, 'staff:write');
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const { data, loading } = useQuery<{ data: StaffApplication[] }>('staff:applications', '/staff/applications');
+  const rows = data?.data ?? [];
+  const pending = rows.filter((r) => r.status === 'PENDING');
+  const handled = rows.filter((r) => r.status !== 'PENDING').slice(0, 4);
+
+  async function decide(app: StaffApplication, action: 'approve' | 'reject') {
+    setBusyId(app._id);
+    try {
+      if (action === 'approve') {
+        await http.post(`/staff/applications/${app._id}/approve`, {});
+        toast(`${app.name} can sign in with ${app.phone} and a code`, 'success');
+      } else {
+        await http.post(`/staff/applications/${app._id}/reject`, {});
+        toast(`Declined ${app.name}`, 'info');
+      }
+      invalidate('staff');
+    } catch (e) {
+      toast(errMsg(e, 'Could not do that'), 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (!rows.length && !loading) return null;
+  return (
+    <Card
+      title="Applications"
+      subtitle={pending.length ? `${pending.length} waiting on you` : 'From the staff sticker — accepting opens their account'}
+      action={pending.length ? <Pill className="bg-ember-50 text-ember-700 ring-ember-200">{pending.length} new</Pill> : undefined}
+    >
+      {loading && !data ? <Spinner /> : !pending.length && !handled.length ? (
+        <EmptyState
+          icon={<UserRoundPlus size={26} />}
+          title="Nobody has asked yet"
+          body="Print the staff code from Settings and stick it by the door. Anyone without an account can apply for a floor job from their own phone."
+        />
+      ) : (
+        <ul className="divide-y divide-ink-100">
+          {pending.map((app) => (
+            <li key={app._id} className="flex flex-wrap items-start gap-3 px-3.5 py-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-ember-50 font-display text-[13px] font-800 text-ember-700 ring-1 ring-ember-200">
+                {initials(app.name)}
+              </span>
+              <div className="min-w-0 flex-1 leading-tight">
+                <p className="truncate text-[13.5px] font-semibold text-ink-900">
+                  {app.name}
+                  <span className="ml-2 text-[11.5px] font-medium text-ink-500">wants {jobLabel(app.role).toLowerCase()}</span>
+                </p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-ink-500">
+                  <a href={`tel:${app.phone}`} className="inline-flex items-center gap-1 font-medium text-ember-600 hover:underline">
+                    <Phone size={11} /> {app.phone}
+                  </a>
+                  <span className="text-ink-300">·</span>
+                  <span>{timeAgo(app.createdAt)}</span>
+                </p>
+                {app.note && <p className="mt-1 rounded-lg bg-ink-50 px-2.5 py-1.5 text-[12px] leading-snug text-ink-600">{app.note}</p>}
+              </div>
+              {writable && (
+                <div className="flex shrink-0 gap-1">
+                  <Button size="sm" variant="ghost" disabled={busyId === app._id} onClick={() => void decide(app, 'reject')}>Decline</Button>
+                  <Button size="sm" variant="primary" loading={busyId === app._id} onClick={() => void decide(app, 'approve')}>
+                    Hire
+                  </Button>
+                </div>
+              )}
+            </li>
+          ))}
+          {!pending.length &&
+            handled.map((app) => (
+              <li key={app._id} className="flex items-center gap-3 px-3.5 py-2.5 text-[12.5px] text-ink-500">
+                <span className="min-w-0 flex-1 truncate">
+                  {app.name} · {jobLabel(app.role).toLowerCase()} · {app.status === 'APPROVED' ? 'hired' : 'declined'}
+                  {app.decidedByName ? ` by ${app.decidedByName}` : ''}
+                </span>
+                <span className="shrink-0 text-[11.5px] text-ink-400">{app.decidedAt ? timeAgo(app.decidedAt) : ''}</span>
+              </li>
+            ))}
+        </ul>
+      )}
+    </Card>
   );
 }

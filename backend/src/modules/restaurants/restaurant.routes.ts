@@ -10,6 +10,7 @@ import { requirePermission } from '../../middleware/rbac';
 import { ApiError } from '../../utils/httpError';
 import { emit, Events } from '../../realtime/emit';
 import { recordAudit } from '../../services/audit.service';
+import { FLOOR_ROLES } from '../../types/constants';
 
 export const restaurantRouter = Router();
 
@@ -52,20 +53,20 @@ restaurantRouter.get(
 );
 
 /**
- * The two codes that put the restaurant on a staff phone. Each one installs its own app —
- * different name, different icon — and both open the same five dashboards, because which
- * screen you get is decided by the account you sign in with, not by the code you scanned.
+ * The one code the whole team scans. It installs a single app and signs in from there:
+ * which of the five screens opens is decided by the account, never by the code — so the
+ * owner, the manager, the waiter, the cook and the cashier all carry the same sticker.
+ * The slug rides along so a person with no account lands on this restaurant's job form.
  */
 restaurantRouter.get(
   '/staff-qr',
   requirePermission('settings:write'),
   asyncHandler(async (req, res) => {
-    const base = clientBase(req.headers.origin);
-    const code = async (path: string) => {
-      const url = `${base}${path}`;
-      return { url, dataUrl: await QRCode.toDataURL(url, { margin: 1, width: 420, errorCorrectionLevel: 'M' }) };
-    };
-    res.json({ owner: await code('/owner.html'), manager: await code('/manager.html') });
+    const restaurant = await RestaurantModel.findById(req.auth!.restaurantId).lean();
+    if (!restaurant) throw ApiError.notFound('Restaurant not found');
+    const url = `${clientBase(req.headers.origin)}/staff.html?r=${encodeURIComponent(restaurant.slug)}`;
+    const dataUrl = await QRCode.toDataURL(url, { margin: 1, width: 420, errorCorrectionLevel: 'M' });
+    res.json({ url, dataUrl });
   }),
 );
 
@@ -108,6 +109,7 @@ const patchSchema = z.object({
       bookingReminderMinutes: z.number().min(5).max(240).optional(),
       allowWaiterCash: z.boolean().optional(),
       deliveryEnabled: z.boolean().optional(),
+      openRoles: z.array(z.enum(FLOOR_ROLES)).max(FLOOR_ROLES.length).optional(),
     })
     .optional(),
 });

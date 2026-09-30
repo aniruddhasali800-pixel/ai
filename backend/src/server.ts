@@ -2,10 +2,26 @@ import http from 'node:http';
 import { createApp } from './app';
 import { env } from './config/env';
 import { connectDb, disconnectDb } from './config/db';
-import { RestaurantModel } from './models';
+import { RestaurantModel, UserModel } from './models';
+import { phoneDigits } from './utils/phone';
 import { seedDemoData } from './seed';
 import { initSocket, closeSocket } from './realtime/socket';
 import { startScheduler, stopScheduler } from './services/scheduler.service';
+
+/**
+ * Accounts that predate the phoneDigits column would never match a code request, because the
+ * number was typed with spaces or a country code when the account was made. One pass at boot
+ * fixes any database that has been sitting there since before the field existed.
+ */
+async function backfillPhoneDigits() {
+  const missing = await UserModel.find({ $or: [{ phoneDigits: null }, { phoneDigits: { $exists: false } }] }, { phone: 1 }).lean();
+  const ops = missing
+    .filter((user) => !!user.phone)
+    .map((user) => ({
+      updateOne: { filter: { _id: user._id }, update: { $set: { phoneDigits: phoneDigits(user.phone) } } },
+    }));
+  if (ops.length) await UserModel.bulkWrite(ops);
+}
 
 async function main() {
   await connectDb();
@@ -14,7 +30,7 @@ async function main() {
     console.log('[server] empty database — loading the Saffron & Smoke demo tenant');
     await seedDemoData();
   }
-
+  await backfillPhoneDigits();
   const app = createApp();
   const server = http.createServer(app);
   initSocket(server);
