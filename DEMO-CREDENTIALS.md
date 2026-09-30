@@ -45,7 +45,7 @@ should be able to reach from another account.
 
 ## Staff — sign in with a phone number and a one-time code
 
-The four floor jobs (waiter, cashier, kitchen) can also log in by tapping the **One-time code** tab,
+The floor jobs — waiter, cashier, kitchen — can also log in by tapping the **One-time code** tab,
 typing the phone number above and the six digits that come back. There is no SMS gateway wired up,
 so on a demo host the code is shown on screen instead of texted. That is exactly why the owner and
 the manager are excluded: a code you can read off the page should not open the settings or the
@@ -82,7 +82,8 @@ just tap a card on the hub at `/` — it logs the right job in and hands you a l
 
 ## Resetting
 
-`cd backend && npm run seed` reloads the demo tenant from scratch (destructive: it drops the
-collections first). Deleting `backend/.data/mongo` does the same on next boot, since a virgin
-database auto-seeds. A Render redeploy reseeds too, which is why the live tokens never match
-localhost's. Set `AUTO_SEED=false` for a clean install.
+`cd backend && npm run seed:fresh` wipes the demo tenant and rebuilds it — which is what hands every
+job its password again. Plain `npm run seed` leaves an existing tenant alone. Deleting
+`backend/.data/mongo` has the same effect on next boot, since a virgin database auto-seeds. A Render
+redeploy reseeds too, which is why the live tokens never match localhost's. Set `AUTO_SEED=false` for
+a clean install.
