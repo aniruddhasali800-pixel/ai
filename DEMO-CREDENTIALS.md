@@ -78,7 +78,8 @@ grant **Manager**; a manager's approve box will not offer it.
 | `/staff.html` | The one code that installs the staff app for any role |
 
 Tokens change whenever the database reseeds, so copy the current ones from Back office → Tables, or
-just tap a card on the hub at `/` — it logs the right job in and hands you a live link.
+just tap a card on the hub at `/` — it logs the right job in and hands you a live link. Every code on
+screen has **Download PNG** beside it, so a sticker can be saved and printed without the print dialog.
 
 ## Resetting
 

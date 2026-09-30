@@ -1,6 +1,8 @@
-import { Copy, QrCode } from 'lucide-react';
+import { Copy, Download, QrCode } from 'lucide-react';
 import type { UpiCharge } from '../lib/types';
 import { inr } from '../lib/format';
+import { IconButton } from './ui';
+import { downloadQr } from '../lib/downloadQr';
 import { toast } from '../store/toasts';
 
 export function UpiQr({ charge }: { charge: UpiCharge }) {
@@ -37,12 +39,20 @@ export function UpiQr({ charge }: { charge: UpiCharge }) {
         <p className="text-[11.5px] leading-snug text-ink-400">
           Cut for {charge.note || 'this bill'}. Works in any UPI app — the amount is already filled in.
         </p>
-        <a
-          href={charge.link}
-          className="shrink-0 rounded-lg bg-ink-900 px-2.5 py-1.5 text-[12px] font-semibold text-white transition-transform hover:bg-ink-800 active:scale-[0.97]"
-        >
-          Open UPI app
-        </a>
+        <div className="flex shrink-0 items-center gap-2">
+          <IconButton
+            label="Download this pay code as a PNG"
+            onClick={() => downloadQr(`payment-${charge.note || 'bill'}-${Math.round(charge.amount)}`, charge.qrDataUrl)}
+          >
+            <Download size={14} />
+          </IconButton>
+          <a
+            href={charge.link}
+            className="shrink-0 rounded-lg bg-ink-900 px-2.5 py-1.5 text-[12px] font-semibold text-white transition-transform hover:bg-ink-800 active:scale-[0.97]"
+          >
+            Open UPI app
+          </a>
+        </div>
       </div>
     </div>
   );

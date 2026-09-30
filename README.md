@@ -99,6 +99,12 @@ Guest links need no login: `/t/<tableToken>` is the QR menu, `/s/<sessionToken>`
 under Tables in the back office, and `GET /api/tables` returns each `qrUrl` ready to print. The hub
 picks up the current tokens for you — no copy-pasting needed.
 
+Every code on screen — a table's QR, the guest ordering card, the staff install card, a bill's UPI
+QR — has **Download PNG** beside it, so a sticker can be saved and printed from anywhere without
+going through the browser's print dialog. The file is named for what it points at
+(`saffron-and-smoke-table-G1.png`), and it is the same image the card shows, so the printed code and
+the one on screen can never disagree.
+
 ## Taking payment
 
 Every unpaid bill carries a **scan-to-pay UPI QR** built from its own total: the amount, the payee

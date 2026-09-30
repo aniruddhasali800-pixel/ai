@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Clock, Link2, Printer, Save, ShieldCheck } from 'lucide-react';
+import { Clock, Download, Link2, Printer, Save, ShieldCheck } from 'lucide-react';
 import { http, errMsg } from '../../lib/api';
 import { useQuery } from '../../lib/query';
 import { useAuth, can } from '../../store/auth';
 import type { Restaurant, Role } from '../../lib/types';
 import { FLOOR_JOBS, JOB_META } from '../../lib/jobs';
 import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Toggle } from '../../components/ui';
+import { downloadQr } from '../../lib/downloadQr';
 import { ImagePicker } from '../../components/ImagePicker';
 import { toast } from '../../store/toasts';
 
@@ -259,6 +260,9 @@ function StaffQrCard({ slug }: { slug: string }) {
               }}
             >
               Copy link
+            </Button>
+            <Button size="sm" variant="secondary" icon={<Download size={13} />} disabled={!data} onClick={() => downloadQr(`${slug}-staff-app`, data?.dataUrl)}>
+              Download PNG
             </Button>
             <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!data} onClick={() => printInstallSticker(slug, data?.dataUrl)}>
               Print sticker

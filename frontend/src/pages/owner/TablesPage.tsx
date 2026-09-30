@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Link2, Plus, Printer, QrCode, RefreshCw, Trash2, Check } from 'lucide-react';
+import { Download, Link2, Plus, Printer, QrCode, RefreshCw, Trash2, Check } from 'lucide-react';
 import { useQuery, invalidate } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
 import type { Paginated, Table, User } from '../../lib/types';
 import { TABLE_STATUS_META } from '../../lib/statusMaps';
 import { Button, Card, EmptyState, Field, Input, Modal, Pill, Select, Spinner } from '../../components/ui';
+import { downloadQr } from '../../lib/downloadQr';
 import { can, useAuth } from '../../store/auth';
 import { clockTime } from '../../lib/format';
 import { toast } from '../../store/toasts';
@@ -111,6 +112,7 @@ export function TablesPage() {
 }
 
 function QrModal({ table, onClose }: { table: Table; onClose: () => void }) {
+  const { restaurant } = useAuth();
   const [img, setImg] = useState<{ dataUrl: string; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -124,12 +126,25 @@ function QrModal({ table, onClose }: { table: Table; onClose: () => void }) {
     <Modal open onClose={onClose} title={`Table ${table.number}`} subtitle="Guests scan this to open the menu and order" width="max-w-sm"
       footer={<>
         <Button variant="ghost" onClick={onClose}>Close</Button>
-        <Button variant="secondary" icon={<Link2 size={14} />} onClick={() => navigator.clipboard?.writeText(img?.url ?? table.qrUrl ?? '')}>Copy link</Button>
+        <Button
+          variant="secondary"
+          icon={<Download size={14} />}
+          disabled={!img?.dataUrl}
+          onClick={() => downloadQr(`${restaurant?.slug ?? 'sizzle'}-table-${table.number}`, img?.dataUrl)}
+        >
+          Download PNG
+        </Button>
         <Button variant="primary" onClick={print}>Print</Button>
       </>}>
       <div className="flex flex-col items-center gap-3 py-2">
         {img?.dataUrl ? <img src={img.dataUrl} alt={`QR for table ${table.number}`} className="h-56 w-56 rounded-xl ring-1 ring-ink-200" /> : <Spinner label="Rendering QR…" />}
         <p className="break-all text-center text-[12px] text-ink-500">{img?.url ?? table.qrUrl}</p>
+        <button
+          onClick={() => navigator.clipboard?.writeText(img?.url ?? table.qrUrl ?? '')}
+          className="flex items-center gap-1.5 text-[12.5px] text-ink-500 transition-colors hover:text-ember-600"
+        >
+          <Link2 size={12} /> Copy link
+        </button>
       </div>
       <div className="mt-2 flex items-center justify-between">
         <Button size="sm" variant="ghost" icon={<RefreshCw size={13} />} loading={busy} onClick={regen}>Regenerate code</Button>
@@ -216,6 +231,9 @@ function OrderingQrCard() {
               }}
             >
               Copy link
+            </Button>
+            <Button size="sm" variant="secondary" icon={<Download size={13} />} disabled={!data} onClick={() => downloadQr(`${restaurant?.slug ?? 'sizzle'}-ordering`, data?.dataUrl)}>
+              Download PNG
             </Button>
             <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!data} onClick={print}>Print sticker</Button>
           </div>
