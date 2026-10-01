@@ -60,7 +60,7 @@ restaurantRouter.get(
  */
 restaurantRouter.get(
   '/staff-qr',
-  requirePermission('settings:write'),
+  requirePermission('settings:read'),
   asyncHandler(async (req, res) => {
     const restaurant = await RestaurantModel.findById(req.auth!.restaurantId).lean();
     if (!restaurant) throw ApiError.notFound('Restaurant not found');

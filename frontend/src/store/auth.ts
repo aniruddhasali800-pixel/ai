@@ -94,6 +94,7 @@ export const PERMISSIONS: Record<string, string[]> = {
     'billing:read', 'billing:write', 'payments:read', 'payments:write', 'payments:refund',
     'bookings:read', 'bookings:write', 'tables:read', 'tables:write', 'requests:read', 'requests:write',
     'staff:read', 'staff:write', 'inventory:read', 'inventory:write', 'reports:read', 'audit:read',
+    'settings:read',
   ],
   CASHIER: [
     'menu:read', 'orders:read', 'orders:status', 'billing:read', 'billing:write',

@@ -29,7 +29,7 @@ const NAV: (NavItem & { permission: string })[] = [
   { to: '/app/reports', label: 'Reports', icon: <BarChart3 size={17} />, permission: 'reports:read' },
   { to: '/app/delivery', label: 'Delivery', icon: <Link2 size={17} />, permission: 'integrations:write' },
   { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={17} />, permission: 'audit:read' },
-  { to: '/app/settings', label: 'Settings', icon: <Settings size={17} />, permission: 'settings:write' },
+  { to: '/app/settings', label: 'Settings', icon: <Settings size={17} />, permission: 'settings:read' },
 ];
 
 export function StaffLayout() {

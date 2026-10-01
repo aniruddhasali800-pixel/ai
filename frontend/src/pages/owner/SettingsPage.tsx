@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Clock, Download, Link2, Printer, Save, ShieldCheck } from 'lucide-react';
+import { Clock, Download, ExternalLink, Link2, Printer, Save, ShieldAlert, ShieldCheck, Sparkles, UserCheck } from 'lucide-react';
 import { http, errMsg } from '../../lib/api';
 import { useQuery } from '../../lib/query';
 import { useAuth, can } from '../../store/auth';
@@ -9,6 +9,7 @@ import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Toggle } 
 import { downloadQr } from '../../lib/downloadQr';
 import { ImagePicker } from '../../components/ImagePicker';
 import { toast } from '../../store/toasts';
+import { OperationsAppModal, OPERATIONS_SYSTEMS } from '../../components/OperationsAppModal';
 
 export function SettingsPage() {
   const { user, restaurant, setRestaurant } = useAuth();
@@ -81,9 +82,24 @@ export function SettingsPage() {
     }
   }
 
+  const isOwner = can(user?.role, 'settings:write');
+
   return (
     <div className="space-y-4">
+      {!isOwner && (
+        <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/90 px-4 py-3 text-[13px] text-blue-900 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <UserCheck size={18} className="text-blue-600" />
+            <span>
+              <strong>Operations Manager View:</strong> You have full access to the Operations App QR code, 4 system dashboards, and shift launchers below.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-2">
+        <StaffQrCard slug={data.slug} isOwner={isOwner} />
+
         <Card title="Restaurant" subtitle="Shown on guest menus and bills">
           <div className="grid gap-3.5 p-4 sm:grid-cols-2">
             <Field label="Name" className="sm:col-span-2"><Input value={data.name} onChange={(e) => set('name', e.target.value)} /></Field>
@@ -204,20 +220,26 @@ export function SettingsPage() {
             </div>
           </Card>
         )}
-
-        {can(user?.role, 'settings:write') && <StaffQrCard slug={data.slug} />}
       </div>
 
       <div className="sticky bottom-4 flex flex-wrap items-center gap-3 rounded-2xl bg-ink-900 px-4 py-3 text-white shadow-xl">
         <ShieldCheck size={16} className="text-leaf-400" />
         <p className="min-w-0 flex-1 text-[12.5px] text-ink-300">
-          {dirty ? 'You have unsaved changes.' : 'Everything on this screen is written to your restaurant only.'}
+          {!isOwner
+            ? 'Manager view: Operations QR code and dashboard launchers active.'
+            : dirty
+            ? 'You have unsaved changes.'
+            : 'Everything on this screen is written to your restaurant only.'}
         </p>
-        <Button size="sm" variant="ghost" className="text-ink-300 hover:bg-white/10" onClick={() => { patchRef.current = {}; setDirty(false); setData(restaurant ?? null); }}>
-          Reset
-        </Button>
+        {isOwner && (
+          <Button size="sm" variant="ghost" className="text-ink-300 hover:bg-white/10" onClick={() => { patchRef.current = {}; setDirty(false); setData(restaurant ?? null); }}>
+            Reset
+          </Button>
+        )}
         <Button size="sm" variant="secondary" onClick={() => setPasswordOpen(true)}>Change password</Button>
-        <Button size="sm" variant="primary" icon={<Save size={14} />} loading={busy} disabled={!dirty} onClick={save}>Save settings</Button>
+        {isOwner && (
+          <Button size="sm" variant="primary" icon={<Save size={14} />} loading={busy} disabled={!dirty} onClick={save}>Save settings</Button>
+        )}
       </div>
 
       <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
@@ -225,52 +247,132 @@ export function SettingsPage() {
   );
 }
 
-const DASHBOARDS = ['Owner back office', 'Manager back office', 'Waiter floor', 'Kitchen display', 'Cashier counter'];
-
-function StaffQrCard({ slug }: { slug: string }) {
+function StaffQrCard({ slug, isOwner }: { slug: string; isOwner: boolean }) {
   const { data, loading } = useQuery<{ url: string; dataUrl: string }>('restaurants:staff-qr', '/restaurants/staff-qr');
+  const [modalOpen, setModalOpen] = useState(false);
+
+  function openPopup() {
+    if (!data?.url) return;
+    window.open(data.url, 'SizzleOperationsOS', 'width=580,height=840,menubar=no,toolbar=no,location=no');
+  }
 
   return (
-    <Card title="Staff app — Restaurant OS" subtitle="One code for the whole team: it installs the working app, not the menu" className="lg:col-span-2">
-      <div className="flex flex-col items-center gap-5 p-4 sm:flex-row">
-        <span className="grid h-44 w-44 shrink-0 place-items-center overflow-hidden rounded-2xl bg-ink-50 ring-1 ring-ink-200">
-          {data ? (
-            <img src={data.dataUrl} alt={`Staff install code for ${slug}`} className="h-full w-full object-contain p-1.5" />
-          ) : (
-            <span className={`text-[12px] text-ink-400 ${loading ? 'animate-pulse' : ''}`}>{loading ? 'Rendering…' : 'Unavailable'}</span>
-          )}
-        </span>
-        <div className="min-w-0 flex-1 space-y-2.5">
-          <p className="text-[13px] leading-relaxed text-ink-600">
-            Print one and stick it by the time clock. Whoever scans it installs the same app and signs in with their own
-            account — {DASHBOARDS.join(', ')} — and the account decides which screen opens. Someone with no account yet
-            gets the job form on the same code, so a walk-in can apply for a waiter, kitchen or counter shift from their
-            own phone.
-          </p>
-          {data && <p className="break-all rounded-lg bg-ink-50 px-3 py-2 font-mono text-[12px] text-ink-500 ring-1 ring-ink-200">{data.url}</p>}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              icon={<Link2 size={13} />}
-              disabled={!data}
-              onClick={() => {
-                void navigator.clipboard?.writeText(data?.url ?? '');
-                toast('Staff install link copied', 'success');
-              }}
-            >
-              Copy link
-            </Button>
-            <Button size="sm" variant="secondary" icon={<Download size={13} />} disabled={!data} onClick={() => downloadQr(`${slug}-staff-app`, data?.dataUrl)}>
-              Download PNG
-            </Button>
-            <Button size="sm" variant="primary" icon={<Printer size={13} />} disabled={!data} onClick={() => printInstallSticker(slug, data?.dataUrl)}>
-              Print sticker
-            </Button>
+    <>
+      <Card
+        title="Operations App & 4 Dashboards (Staff Only)"
+        subtitle="Scan QR code or open the window to download and launch all 4 operational systems on mobile and computer"
+        className="lg:col-span-2 border-ember-300/80 shadow-sm"
+      >
+        <div className="flex flex-col gap-6 p-4 sm:flex-row sm:items-center">
+          {/* QR Code Container */}
+          <div className="flex shrink-0 flex-col items-center">
+            <span className="grid h-44 w-44 place-items-center overflow-hidden rounded-2xl bg-white p-2 shadow-sm ring-1 ring-ink-200">
+              {data ? (
+                <img src={data.dataUrl} alt={`Staff install code for ${slug}`} className="h-full w-full object-contain" />
+              ) : (
+                <span className={`text-[12px] text-ink-400 ${loading ? 'animate-pulse' : ''}`}>
+                  {loading ? 'Generating QR…' : 'Unavailable'}
+                </span>
+              )}
+            </span>
+            <span className="mt-1.5 text-[11px] font-semibold text-ink-500">Scan to install on phone</span>
+          </div>
+
+          {/* Details & Actions */}
+          <div className="min-w-0 flex-1 space-y-3.5">
+            {/* Security Warning Notice */}
+            <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/90 p-3 text-[12px] text-amber-950">
+              <ShieldAlert size={17} className="mt-0.5 shrink-0 text-amber-600" />
+              <div>
+                <span className="font-bold">Strictly Restricted to Operations:</span> This QR code and window give access to the 4 operational systems:
+                Kitchen Display, Waiter Floor, Cashier POS, and Owner/Manager Back Office. Customer food ordering is prohibited here.
+              </div>
+            </div>
+
+            {/* The 4 Systems Preview Pills */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {OPERATIONS_SYSTEMS.map((sys) => (
+                <div
+                  key={sys.id}
+                  onClick={() => window.open(sys.url, '_blank')}
+                  className="group flex cursor-pointer items-center gap-2 rounded-xl border border-ink-200 bg-white p-2 shadow-xs transition-all hover:border-ink-400 hover:shadow-sm"
+                >
+                  <img src={sys.iconSrc} alt={sys.name} className="h-7 w-7 shrink-0 rounded-lg shadow-2xs" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11.5px] font-bold text-ink-900 group-hover:text-ember-600">{sys.name}</p>
+                    <p className="text-[10px] font-mono text-ink-400">{sys.url}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {data && (
+              <p className="break-all rounded-lg bg-ink-50 px-3 py-1.5 font-mono text-[11.5px] text-ink-500 ring-1 ring-ink-200">
+                {data.url}
+              </p>
+            )}
+
+            {/* Interactive Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="primary"
+                icon={<Sparkles size={14} />}
+                onClick={() => setModalOpen(true)}
+              >
+                Open Operations App Window
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<ExternalLink size={13} />}
+                disabled={!data}
+                onClick={openPopup}
+              >
+                Launch Standalone Window
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Download size={13} />}
+                disabled={!data}
+                onClick={() => downloadQr(`${slug}-staff-app`, data?.dataUrl)}
+              >
+                Download PNG
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<Printer size={13} />}
+                disabled={!data}
+                onClick={() => printInstallSticker(slug, data?.dataUrl)}
+              >
+                Print Sticker
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<Link2 size={13} />}
+                disabled={!data}
+                onClick={() => {
+                  void navigator.clipboard?.writeText(data?.url ?? '');
+                  toast('Staff operations link copied', 'success');
+                }}
+              >
+                Copy link
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+
+      <OperationsAppModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        slug={slug}
+        qrDataUrl={data?.dataUrl}
+      />
+    </>
   );
 }
 
