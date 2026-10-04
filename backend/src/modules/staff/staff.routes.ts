@@ -152,7 +152,8 @@ staffRouter.post(
       throw ApiError.forbidden('Only the owner can reset a manager password');
     }
     user.passwordHash = await hashPassword(req.body.password);
-    user.refreshTokenHash = undefined;
+    // Every device on the old password is signed out, not only the one that reset it.
+    user.refreshTokens = [];
     await user.save();
 
     await recordAudit({

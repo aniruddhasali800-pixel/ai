@@ -9,6 +9,9 @@ const customerRequestSchema = new Schema(
     type: { type: String, enum: REQUEST_TYPES, required: true },
     note: { type: String, trim: true, default: '' },
     status: { type: String, enum: ['OPEN', 'ACKNOWLEDGED', 'DONE'], default: 'OPEN' },
+    /** Who raised the call. A waiter asking for a clear is answered by the counter, so the
+     *  reply has to travel back to the raise rather than to whoever holds the table now. */
+    raisedByUserId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     handledByUserId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     handledAt: { type: Date, default: null },
     /** A guest asking to pay in cash is a request that carries the bill it is about. */

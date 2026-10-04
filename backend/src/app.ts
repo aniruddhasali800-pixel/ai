@@ -44,6 +44,14 @@ export function createApp() {
     app.use(morgan(env.isProd ? 'combined' : 'dev'));
   }
 
+  // A staff screen re-reads the same URL every few seconds, and a JSON body with no freshness
+  // header is fair game for the browser cache — the floor then replays yesterday's tables, and a
+  // stale read is indistinguishable from a lost order.
+  app.use('/api', (_req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   // Webhooks must see the raw body to verify signatures, so they are mounted
   // before the JSON parser.
   app.use('/api/payments/webhook', paymentWebhookRouter);

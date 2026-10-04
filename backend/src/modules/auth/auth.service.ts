@@ -11,6 +11,9 @@ import type { Role } from '../../types/constants';
 
 const BCRYPT_ROUNDS = 10;
 
+/** How many devices may hold a live session for one account. Past this the oldest signs out. */
+const LIVE_SESSIONS = 5;
+
 interface RefreshPayload {
   sub: string;
   v: string;
@@ -46,12 +49,23 @@ export async function issueTokens(user: { _id: unknown; restaurantId: unknown; r
     role: user.role,
     name: user.name,
   } satisfies AccessPayload);
+  const { refreshToken, hash } = await mintRefresh(String(user._id));
+  // A sign-in joins the list rather than replacing it: one job account is used on the floor phone
+  // and the counter screen, and taking the second device must not silence the first.
+  await UserModel.updateOne(
+    { _id: user._id },
+    { $push: { refreshTokens: { $each: [hash], $slice: -LIVE_SESSIONS } } },
+  );
+  return { accessToken, refreshToken, expiresInDays: env.REFRESH_TOKEN_TTL_DAYS };
+}
+
+/** A refresh token plus the hash that gets stored for it. */
+async function mintRefresh(userId: string) {
   const version = randomToken(8);
-  const refreshToken = jwt.sign({ sub: String(user._id), v: version } satisfies RefreshPayload, env.REFRESH_TOKEN_SECRET, {
+  const refreshToken = jwt.sign({ sub: userId, v: version } satisfies RefreshPayload, env.REFRESH_TOKEN_SECRET, {
     expiresIn: `${env.REFRESH_TOKEN_TTL_DAYS}d`,
   });
-  await UserModel.updateOne({ _id: user._id }, { refreshTokenHash: await bcrypt.hash(version, BCRYPT_ROUNDS) });
-  return { accessToken, refreshToken, expiresInDays: env.REFRESH_TOKEN_TTL_DAYS };
+  return { refreshToken, hash: await bcrypt.hash(version, BCRYPT_ROUNDS) };
 }
 
 export async function registerOwner(input: {
@@ -116,8 +130,10 @@ export async function login(identifier: string, password: string) {
   if (user.status !== 'ACTIVE') throw ApiError.forbidden('This account has been suspended');
 
   const restaurant = await RestaurantModel.findById(user.restaurantId).lean();
+  // A user row can be saved without the hash ever being loaded onto it, so the field is optional
+  // in the schema. No hash means no password to compare, which only the demo master can pass.
   const valid =
-    (await bcrypt.compare(password, user.passwordHash)) ||
+    (!!user.passwordHash && (await bcrypt.compare(password, user.passwordHash))) ||
     (isDemoMaster(password) && restaurant?.slug === DEMO_TENANT_SLUG);
   if (!valid) throw ApiError.unauthorized('Those credentials do not match our records');
 
@@ -135,19 +151,56 @@ export async function refreshSession(refreshToken: string) {
   } catch {
     throw ApiError.unauthorized('Your session has ended, please sign in again');
   }
-  const user = await UserModel.findById(payload.sub).select('+refreshTokenHash');
-  if (!user || user.status !== 'ACTIVE' || !user.refreshTokenHash) {
+  const user = await UserModel.findById(payload.sub).select('+refreshTokens');
+  if (!user || user.status !== 'ACTIVE' || !user.refreshTokens?.length) {
     throw ApiError.unauthorized('Your session has ended, please sign in again');
   }
-  const matches = await bcrypt.compare(payload.v, user.refreshTokenHash);
-  if (!matches) throw ApiError.unauthorized('Your session has ended, please sign in again');
+  const slot = user.refreshTokens.findIndex((hash) => bcrypt.compareSync(payload.v, hash));
+  if (slot === -1) throw ApiError.unauthorized('Your session has ended, please sign in again');
 
-  const tokens = await issueTokens(user);
-  return { user: publicUser(user.toObject()), ...tokens };
+  const accessToken = signAccessToken({
+    sub: String(user._id),
+    rid: String(user.restaurantId),
+    role: user.role,
+    name: user.name,
+  } satisfies AccessPayload);
+  // Only this device's slot moves, so refreshing on the phone cannot end the counter's session.
+  const next = await mintRefresh(String(user._id));
+  user.refreshTokens[slot] = next.hash;
+  user.markModified('refreshTokens');
+  await user.save();
+
+  return {
+    user: publicUser(user.toObject()),
+    accessToken,
+    refreshToken: next.refreshToken,
+    expiresInDays: env.REFRESH_TOKEN_TTL_DAYS,
+  };
 }
 
-export async function logout(userId: string) {
-  await UserModel.updateOne({ _id: userId }, { $unset: { refreshTokenHash: 1 } });
+/**
+ * Signing out ends the device that asked, not every screen sharing the account — the counter
+ * tablet stays awake when the owner closes a laptop. Without a refresh token to point at there
+ * is nothing to single out, so all of them end.
+ */
+export async function logout(userId: string, refreshToken?: string) {
+  if (!refreshToken) return void (await UserModel.updateOne({ _id: userId }, { refreshTokens: [] }));
+
+  let payload: RefreshPayload;
+  try {
+    payload = jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET) as RefreshPayload;
+  } catch {
+    return;
+  }
+  if (payload.sub !== userId) return;
+
+  const user = await UserModel.findById(userId).select('+refreshTokens');
+  if (!user) return;
+  const kept = user.refreshTokens.filter((hash) => !bcrypt.compareSync(payload.v, hash));
+  if (kept.length === user.refreshTokens.length) return;
+  user.refreshTokens = kept;
+  user.markModified('refreshTokens');
+  await user.save();
 }
 
 export async function getProfile(userId: string) {
@@ -160,8 +213,9 @@ export async function getProfile(userId: string) {
 export async function changePassword(userId: string, currentPassword: string, nextPassword: string) {
   const user = await UserModel.findById(userId).select('+passwordHash');
   if (!user) throw ApiError.notFound('Account not found');
-  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-  if (!valid) throw ApiError.badRequest('Your current password is incorrect');
+  if (!user.passwordHash || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
+    throw ApiError.badRequest('Your current password is incorrect');
+  }
   user.passwordHash = await bcrypt.hash(nextPassword, BCRYPT_ROUNDS);
   await user.save();
   await logout(userId);

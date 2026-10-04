@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { BillModel, OrderModel, PaymentModel, RestaurantModel, TableModel, TableSessionModel, nextSeq } from '../models';
+import { BillModel, CustomerRequestModel, OrderModel, PaymentModel, RestaurantModel, TableModel, TableSessionModel, nextSeq } from '../models';
 import { round2, roundToRupee } from '../utils/money';
 import { emit, Events } from '../realtime/emit';
 import { ApiError } from '../utils/httpError';
@@ -366,6 +366,18 @@ async function settleBill(billId: string, restaurantId: string, paymentId: strin
 
   if (bill.tableSessionId) {
     await closeSession(bill.tableSessionId);
+    // The money has been counted, so the calls that asked for it are answered. Left open, a
+    // phantom "collect ₹990" ticket sits in the counter queue for the rest of the shift.
+    const answered = await CustomerRequestModel.updateMany(
+      {
+        restaurantId,
+        tableSessionId: bill.tableSessionId,
+        type: { $in: ['BILL', 'CASH_PAYMENT'] },
+        status: { $ne: 'DONE' },
+      },
+      { status: 'DONE', handledAt: new Date(), handledByUserId: actor.userId },
+    );
+    if (answered.modifiedCount) emit.toRestaurant(restaurantId, Events.REQUEST_UPDATED, { tableSessionId: String(bill.tableSessionId) });
     const session = await TableSessionModel.findById(bill.tableSessionId).select('publicToken').lean();
     if (session) {
       emit.toSession(session.publicToken, Events.BILL_PAID, {

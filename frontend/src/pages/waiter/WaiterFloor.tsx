@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Banknote, CheckCheck, CircleUser, Inbox, PlusCircle, Receipt, Timer, Users } from 'lucide-react';
+import { ArrowRight, Banknote, CheckCheck, CircleUser, Hand, Inbox, PlusCircle, ScrollText, Share2, Timer, Users } from 'lucide-react';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
-import type { Bill, CustomerRequest, WaiterTable } from '../../lib/types';
+import type { CustomerRequest, WaiterTable } from '../../lib/types';
 import { REQUEST_LABEL, TABLE_STATUS_META } from '../../lib/statusMaps';
 import { inr, minutesSince, timeAgo } from '../../lib/format';
-import { Button, Card, EmptyState, Pill, Spinner, StatTile } from '../../components/ui';
+import { Button, Card, EmptyState, LinkButton, Pill, Spinner, StatTile } from '../../components/ui';
 import { toast } from '../../store/toasts';
 import { useAuth } from '../../store/auth';
+import { BillAction, ClearAction, TableTicket } from './TableTicket';
 
 interface Shift {
   tablesAssigned: number;
@@ -26,18 +27,36 @@ export function WaiterFloor() {
   const { data: shift } = useQuery<Shift>('waiter:summary', '/waiters/me/summary');
   const { data: floor, loading } = useQuery<{ data: WaiterTable[] }>('floor:map', '/waiters/map');
   const { data: calls } = useQuery<{ data: CustomerRequest[] }>('requests:list', '/waiters/requests');
+  const [ticketId, setTicketId] = useState<string | null>(null);
 
   const tables = floor?.data ?? [];
-  const mine = tables.filter((t) => t.mine && t.session);
+  // The floor is open: every waiter works every table, so the home screen lists every seated
+  // party and names who opened it — a punch on a colleague's table is still your work.
+  const seated = tables.filter((t) => t.session);
   const openCalls = (calls?.data ?? []).filter((r) => r.status !== 'DONE');
   const myCalls = openCalls.filter((r) => r.mine);
+  // The drawer reads its table from the live floor list, so a bill the counter just accepted
+  // appears inside it without the waiter closing and reopening.
+  const ticket = ticketId ? tables.find((t) => t._id === ticketId) ?? null : null;
+
+  async function claim(t: WaiterTable) {
+    try {
+      await http.post(`/waiters/tables/${t._id}/claim`);
+      invalidate('floor');
+      invalidate('tables');
+      toast(`Table ${t.number} is yours`, 'success');
+    } catch (e) {
+      invalidate('floor');
+      toast(errMsg(e, 'Could not take that table'), 'error');
+    }
+  }
 
   if (loading && !floor) return <Spinner label="Loading your floor…" />;
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-        <StatTile label="My tables" value={String(shift?.tablesAssigned ?? mine.length)} hint={`${mine.filter((t) => t.session).length} seated`} />
+        <StatTile label="Seated now" value={String(seated.length)} hint={`${shift?.tablesAssigned ?? 0} with your name`} />
         <StatTile label="Orders today" value={String(shift?.ordersToday ?? 0)} />
         <StatTile label="Sales today" value={inr(shift?.salesToday ?? 0)} tone="leaf" />
         <StatTile label="Ready to pick" value={String(shift?.awaitingPickup ?? 0)} tone="ember" hint="from the pass" />
@@ -48,38 +67,54 @@ export function WaiterFloor() {
         subtitle={shift ? `Shift started ${timeAgo(shift.shiftStartedAt)} · ${shift.bookings} of your tables have bookings` : undefined}
         action={<Button size="sm" variant="primary" icon={<PlusCircle size={14} />} onClick={() => navigate('/floor/order')}>New order</Button>}
       >
-        {mine.length ? (
+        {seated.length ? (
           <ul className="divide-y divide-ink-100">
-            {mine.map((t) => (
-              <li key={t._id} className="flex items-center gap-3 px-3.5 py-3">
-                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-display text-[13px] font-800 ${TABLE_STATUS_META[t.status].card} ${TABLE_STATUS_META[t.status].text}`}>
-                  {t.number}
-                </span>
-                <div className="min-w-0 flex-1 leading-tight">
-                  <p className="truncate text-[13.5px] font-semibold text-ink-900">
-                    {t.session?.customerName || `Guest party`} · {t.session?.guestCount} pax
-                  </p>
-                  <p className="truncate text-[12px] text-ink-500">
-                    {t.activeOrders.length} order{t.activeOrders.length === 1 ? '' : 's'} · {inr(t.runningTotal)} on the tab
-                    {t.session ? ` · opened ${timeAgo(t.session.openedAt)}` : ''}
-                  </p>
+            {seated.map((t) => (
+              <li key={t._id} className="px-3.5 py-3">
+                <div className="flex items-center gap-3">
+                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl font-display text-[13px] font-800 ${TABLE_STATUS_META[t.status].card} ${TABLE_STATUS_META[t.status].text}`}>
+                    {t.number}
+                  </span>
+                  <div className="min-w-0 flex-1 leading-tight">
+                    <p className="truncate text-[13.5px] font-semibold text-ink-900">
+                      {t.session?.customerName || `Guest party`} · {t.session?.guestCount} pax
+                      {!t.mine && (t.assignedWaiterName ? (
+                        <span className="ml-1 text-[11.5px] font-semibold uppercase text-ink-500">with {t.assignedWaiterName}</span>
+                      ) : (
+                        <span className="ml-1 text-[11.5px] font-semibold uppercase text-ember-600">unclaimed</span>
+                      ))}
+                    </p>
+                    <p className="truncate text-[12px] text-ink-500">
+                      {t.activeOrders.length} order{t.activeOrders.length === 1 ? '' : 's'} · {inr(t.runningTotal)} on the tab
+                      {t.session ? ` · opened ${timeAgo(t.session.openedAt)}` : ''}
+                    </p>
+                  </div>
+                  {!!t.openRequests.length && (
+                    <Pill className="bg-amber-50 text-amber-800 ring-amber-200">{t.openRequests.length} call</Pill>
+                  )}
+                  <span className="hidden shrink-0 font-display text-[14px] font-800 tabular-nums text-ink-900 sm:block">{inr(t.runningTotal)}</span>
+                  <button onClick={() => navigate('/floor/map')} className="text-ink-300 hover:text-ink-700" aria-label="Open floor">
+                    <ArrowRight size={16} />
+                  </button>
                 </div>
-                {!!t.openRequests.length && (
-                  <Pill className="bg-amber-50 text-amber-800 ring-amber-200">{t.openRequests.length} call</Pill>
-                )}
-                <span className="hidden shrink-0 font-display text-[14px] font-800 tabular-nums text-ink-900 sm:block">{inr(t.runningTotal)}</span>
-                <BillButton table={t} />
-                <button onClick={() => navigate('/floor/map')} className="text-ink-300 hover:text-ink-700" aria-label="Open floor">
-                  <ArrowRight size={16} />
-                </button>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {!t.assignedWaiterId && (
+                    <Button size="sm" variant="primary" icon={<Hand size={13} />} onClick={() => void claim(t)}>Take this table</Button>
+                  )}
+                  {!!t.activeOrders.length && (
+                    <Button size="sm" variant="secondary" icon={<ScrollText size={13} />} onClick={() => setTicketId(t._id)}>Tickets</Button>
+                  )}
+                  <BillAction table={t} />
+                  <ClearAction table={t} />
+                </div>
               </li>
             ))}
           </ul>
         ) : (
           <EmptyState
             icon={<CircleUser size={26} />}
-            title="No tables on your patch yet"
-            body="Seat a party from the floor plan and the tab shows up here."
+            title="Nobody is seated yet"
+            body="Seat a party from the floor plan, or take a guest-seated table, and the tab shows up here."
             action={<Button size="sm" variant="secondary" icon={<Users size={14} />} onClick={() => navigate('/floor/map')}>Open floor plan</Button>}
           />
         )}
@@ -96,47 +131,18 @@ export function WaiterFloor() {
           <EmptyState icon={<Inbox size={24} />} title="All quiet" body="No open requests from guests." />
         )}
       </Card>
+      {ticket && <TableTicket table={ticket} onClose={() => setTicketId(null)} />}
     </div>
-  );
-}
-
-function BillButton({ table }: { table: WaiterTable }) {
-  const navigate = useNavigate();
-  const [busy, setBusy] = useState(false);
-
-  async function issue() {
-    if (!table.session) return;
-    setBusy(true);
-    try {
-      const { data } = await http.post<{ bill: Bill }>('/billing', { sessionId: table.session._id });
-      invalidate('floor:map');
-      invalidate('bills');
-      toast(`${data.bill.billNumber} issued for table ${table.number}`, 'success');
-      navigate(`/bill/${data.bill.publicToken}`);
-    } catch (e) {
-      toast(errMsg(e, 'Could not bill this table'), 'error');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <Button
-      size="sm"
-      variant="secondary"
-      loading={busy}
-      icon={<Receipt size={13} />}
-      onClick={() => void issue()}
-      className="shrink-0"
-    >
-      <span className="hidden sm:inline">Bill</span>
-    </Button>
   );
 }
 
 function CallRow({ r }: { r: CustomerRequest }) {
   const waited = minutesSince(r.createdAt);
   const cash = r.type === 'CASH_PAYMENT';
+  // A bill call is answered by cutting the bill and a clear by confirming the money — the till or
+  // the office does both, so a waiter closing one would empty the queue with nothing collected.
+  // Every other call is service, and on an open floor any waiter can answer it.
+  const serviceCall = !cash && r.type !== 'BILL' && r.type !== 'TABLE_CLEAR';
 
   async function move(status: 'ACKNOWLEDGED' | 'DONE') {
     try {
@@ -180,13 +186,29 @@ function CallRow({ r }: { r: CustomerRequest }) {
           ) : (
             <Pill className="bg-amber-50 text-amber-800 ring-amber-200">No bill yet</Pill>
           )
+        ) : r.type === 'BILL' ? (
+          r.billPublicToken ? (
+            <LinkButton to={`/bill/${r.billPublicToken}`} size="sm" variant="primary" icon={<Share2 size={13} />}>
+              Show QR{r.billGrandTotal ? ` · ${inr(r.billGrandTotal)}` : ''}
+            </LinkButton>
+          ) : (
+            <Pill className="bg-blue-50 text-blue-800 ring-blue-200">
+              {r.status === 'ACKNOWLEDGED' ? (r.handledByUserId ? 'Counter is on it' : 'Office is on it') : 'With the counter'}
+            </Pill>
+          )
+        ) : r.type === 'TABLE_CLEAR' ? (
+          <Pill className="bg-blue-50 text-blue-800 ring-blue-200">
+            {r.status === 'ACKNOWLEDGED' ? 'Counter confirming' : 'With the counter'}
+          </Pill>
         ) : (
-          <>
-            {r.status === 'OPEN' && (
-              <Button size="sm" variant="secondary" onClick={() => void move('ACKNOWLEDGED')}>I'm on it</Button>
-            )}
-            <Button size="sm" variant="success" icon={<CheckCheck size={14} />} onClick={() => void move('DONE')}>Done</Button>
-          </>
+          serviceCall && (
+            <>
+              {r.status === 'OPEN' && (
+                <Button size="sm" variant="secondary" onClick={() => void move('ACKNOWLEDGED')}>I'm on it</Button>
+              )}
+              <Button size="sm" variant="success" icon={<CheckCheck size={14} />} onClick={() => void move('DONE')}>Done</Button>
+            </>
+          )
         )}
       </div>
     </li>

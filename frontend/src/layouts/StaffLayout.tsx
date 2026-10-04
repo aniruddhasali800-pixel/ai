@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import {
   BarChart3,
+  Bell,
   CalendarClock,
   ClipboardList,
   LayoutGrid,
@@ -21,6 +22,7 @@ import { can } from '../store/auth';
 const NAV: (NavItem & { permission: string })[] = [
   { to: '/app', label: 'Dashboard', icon: <LayoutGrid size={17} />, permission: 'reports:read', end: true },
   { to: '/app/orders', label: 'Orders', icon: <ClipboardList size={17} />, permission: 'orders:read' },
+  { to: '/app/requests', label: 'Guest calls', icon: <Bell size={17} />, permission: 'requests:read' },
   { to: '/app/tables', label: 'Tables & QR', icon: <Sparkles size={17} />, permission: 'tables:read' },
   { to: '/app/menu', label: 'Menu', icon: <UtensilsCrossed size={17} />, permission: 'menu:read' },
   { to: '/app/bookings', label: 'Bookings', icon: <CalendarClock size={17} />, permission: 'bookings:read' },

@@ -1,11 +1,10 @@
 import { Banknote, CheckCheck, Inbox, ReceiptText } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
 import type { Bill, CustomerRequest, Payment } from '../../lib/types';
 import { REQUEST_LABEL } from '../../lib/statusMaps';
 import { inr, timeAgo } from '../../lib/format';
-import { Button, Card, EmptyState, Pill, Spinner } from '../../components/ui';
+import { Button, Card, EmptyState, LinkButton, Pill, Spinner } from '../../components/ui';
 import { toast } from '../../store/toasts';
 import { can, useAuth } from '../../store/auth';
 
@@ -14,12 +13,14 @@ export function PosRequests() {
   const write = can(user?.role, 'requests:write');
   const bills = can(user?.role, 'billing:write');
   const settleCash = can(user?.role, 'payments:write');
-  const navigate = useNavigate();
+  // The floor can raise a bill or a clear, but only the till and the office answer them.
+  const answersCalls = write && user?.role !== 'WAITER';
   const { data, loading } = useQuery<{ data: CustomerRequest[] }>('requests:list', '/waiters/requests');
   const rows = data?.data ?? [];
   const billCalls = rows.filter((r) => r.type === 'BILL' && r.status !== 'DONE');
   const cashRounds = rows.filter((r) => r.type === 'CASH_PAYMENT' && r.status !== 'DONE');
-  const rest = rows.filter((r) => r.type !== 'BILL' && r.type !== 'CASH_PAYMENT');
+  const clearCalls = rows.filter((r) => r.type === 'TABLE_CLEAR' && r.status !== 'DONE');
+  const rest = rows.filter((r) => r.type !== 'BILL' && r.type !== 'CASH_PAYMENT' && r.type !== 'TABLE_CLEAR');
 
   async function done(r: CustomerRequest) {
     try {
@@ -32,18 +33,26 @@ export function PosRequests() {
     }
   }
 
-  /** Guests pressed "Bill please" — total the whole table server-side, then hand it to the till. */
-  async function raiseBill(r: CustomerRequest) {
+  /** Guests or the floor pressed "Bill please" — the server totals the table, issues the bill, and
+   *  pushes it back to whoever is carrying the table so they can show the guest the QR. */
+  async function answer(r: CustomerRequest) {
     try {
-      const { data: res } = await http.post<{ bill: Bill }>('/billing', { sessionId: r.tableSessionId });
-      await http.patch(`/waiters/requests/${r._id}`, { status: 'DONE' }).catch(() => undefined);
+      const { data: res } = await http.post<{ bill?: Bill; settled?: boolean }>(`/waiters/requests/${r._id}/accept`, {});
       invalidate('requests');
       invalidate('bills');
       invalidate('tables');
-      toast(`Bill ${res.bill.billNumber} ready for table ${r.tableNumber ?? ''}`, 'success');
-      navigate('/pos');
+      invalidate('floor');
+      toast(
+        res.settled
+          ? `Table ${r.tableNumber ?? ''} was already settled`
+          : res.bill
+            ? `Bill ${res.bill.billNumber} issued for table ${r.tableNumber ?? ''} — the floor has it`
+            : `Table ${r.tableNumber ?? ''} is free`,
+        'success',
+      );
     } catch (e) {
-      toast(errMsg(e, 'That table still has open orders'), 'error');
+      invalidate('requests');
+      toast(errMsg(e, 'Could not answer that call'), 'error');
     }
   }
 
@@ -79,11 +88,19 @@ export function PosRequests() {
       />
       <RequestGroup
         title="Bill requests"
-        hint="Issue the bill, then settle it at the counter"
+        hint="Answer the call — the bill is cut here and sent back to the floor"
         rows={billCalls}
         write={write}
         onDone={done}
-        onBill={bills ? raiseBill : undefined}
+        onAccept={bills && answersCalls ? { fn: answer, label: 'Cut the bill' } : undefined}
+      />
+      <RequestGroup
+        title="Table clears"
+        hint="The floor says the guests have gone — confirm nothing is owed and free the table"
+        rows={clearCalls}
+        write={write}
+        onDone={done}
+        onAccept={answersCalls ? { fn: answer, label: 'Confirm clear' } : undefined}
       />
       <RequestGroup title="Floor calls" hint="Ask a waiter to pick these up" rows={rest} write={write} onDone={done} />
       {!rows.length && (
@@ -101,7 +118,7 @@ function RequestGroup({
   rows,
   write,
   onDone,
-  onBill,
+  onAccept,
   onSettle,
   collectedHint,
 }: {
@@ -110,7 +127,7 @@ function RequestGroup({
   rows: CustomerRequest[];
   write: boolean;
   onDone: (r: CustomerRequest) => Promise<void>;
-  onBill?: ((r: CustomerRequest) => Promise<void>) | undefined;
+  onAccept?: { fn: (r: CustomerRequest) => Promise<void>; label: string } | undefined;
   onSettle?: ((r: CustomerRequest) => Promise<void>) | undefined;
   collectedHint?: boolean;
 }) {
@@ -139,11 +156,15 @@ function RequestGroup({
             <Pill className={r.status === 'ACKNOWLEDGED' ? 'bg-blue-50 text-blue-800 ring-blue-200' : 'bg-amber-50 text-amber-800 ring-amber-200'}>
               {r.status === 'ACKNOWLEDGED' ? (collectedHint ? 'At the till' : 'On it') : 'Waiting'}
             </Pill>
-            {onBill && (
-              <Button size="sm" icon={<ReceiptText size={14} />} onClick={() => void onBill(r)}>
-                Raise bill
+            {onAccept && (r.billPublicToken ? (
+              <LinkButton to={`/bill/${r.billPublicToken}`} size="sm" variant="secondary" icon={<ReceiptText size={14} />}>
+                Show bill
+              </LinkButton>
+            ) : (
+              <Button size="sm" variant="primary" icon={<ReceiptText size={14} />} onClick={() => void onAccept.fn(r)}>
+                {onAccept.label}
               </Button>
-            )}
+            ))}
             {onSettle && r.collectedAt && (
               <Button size="sm" variant="success" icon={<Banknote size={14} />} onClick={() => void onSettle(r)}>
                 Payment done

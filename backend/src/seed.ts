@@ -899,6 +899,11 @@ export async function seedDemoData(fresh = false): Promise<void> {
   });
 
   // ── Wrap-up ───────────────────────────────────────────────────────────────
+  // History above attributes orders to a named waiter, but a demo floor with a waiter
+  // printed on every free seat makes "take this table" unreachable — a guest who seats
+  // themself looks owned by whoever is off shift. Only a seated party holds a waiter.
+  await TableModel.updateMany({ restaurantId: rid, status: 'AVAILABLE' }, { assignedWaiterId: null });
+
   const liveTables = await TableModel.find({ restaurantId: restaurant._id }).select('number status').lean();
   console.log(`
   Sizzle demo data ready — Saffron & Smoke (${rid})

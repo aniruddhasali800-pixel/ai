@@ -183,7 +183,7 @@ export function GuestSession() {
               <Flame size={12} /> Bill requested — the counter has been notified
             </span>
           ) : (
-            'Extra hunger? Scan the table code again to add another order.'
+            'Extra hunger? Scan the table code again — until the kitchen starts, it joins the order you have running.'
           )}
         </p>
       </main>

@@ -11,6 +11,35 @@ export async function setTableStatus(tableId: string | Types.ObjectId, status: T
   return table;
 }
 
+/**
+ * Puts this waiter's name on the table, but only while no name is on it yet.
+ *
+ * The floor shows "with Sneha" so a colleague knows who is running a party and a guest asking
+ * "where is my order" gets an answer. It is a label and not a lock: nobody is refused work on a
+ * table that already shows a name. The write is conditional so that two phones tapping the same
+ * free table at the same instant settle on one name instead of overwriting each other.
+ */
+export async function takeTableForWaiter(opts: {
+  restaurantId: string;
+  tableId: string;
+  waiterId: string;
+}): Promise<{ holder: string | null; number: string }> {
+  const mine = await TableModel.findOneAndUpdate(
+    { _id: opts.tableId, restaurantId: opts.restaurantId, assignedWaiterId: null },
+    { assignedWaiterId: opts.waiterId },
+    { new: true },
+  ).lean();
+  if (mine) {
+    emit.toRestaurant(opts.restaurantId, Events.TABLE_UPDATED, serializeTable(mine));
+    return { holder: opts.waiterId, number: mine.number };
+  }
+  const table = await TableModel.findOne({ _id: opts.tableId, restaurantId: opts.restaurantId })
+    .select('number assignedWaiterId')
+    .lean();
+  if (!table) throw ApiError.notFound('Table not found');
+  return { holder: table.assignedWaiterId ? String(table.assignedWaiterId) : null, number: table.number };
+}
+
 export function serializeTable(table: Record<string, any>) {
   return {
     _id: String(table._id),

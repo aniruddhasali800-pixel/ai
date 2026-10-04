@@ -26,7 +26,7 @@ export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'ARRIVED' | 'SEATED' | 'CO
 export type PaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'ONLINE';
 export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
 export type BillStatus = 'ISSUED' | 'PAID' | 'VOID' | 'REFUNDED';
-export type RequestType = 'CALL_WAITER' | 'WATER' | 'PLATE' | 'CUTLERY' | 'NAPKIN' | 'BILL' | 'CASH_PAYMENT' | 'OTHER';
+export type RequestType = 'CALL_WAITER' | 'WATER' | 'PLATE' | 'CUTLERY' | 'NAPKIN' | 'BILL' | 'CASH_PAYMENT' | 'TABLE_CLEAR' | 'OTHER';
 export type Station = 'MAIN' | 'GRILL' | 'FRY' | 'TANDOOR' | 'BAR' | 'DESSERT';
 export type InventoryUnit = 'KG' | 'G' | 'L' | 'ML' | 'PCS' | 'PACKET';
 export type InventoryTxType = 'DEDUCTION' | 'RECEIPT' | 'ADJUSTMENT' | 'WASTE' | 'RETURN';
@@ -268,7 +268,16 @@ export interface WaiterTable extends Table {
   mine: boolean;
   session: TableSessionRef | null;
   activeOrders: { _id: string; orderNumber: string; status: OrderStatus; grandTotal: number; itemCount: number }[];
-  openRequests: { _id: string; type: RequestType; note: string; status: string; createdAt: string }[];
+  openRequests: {
+    _id: string;
+    type: RequestType;
+    note: string;
+    status: string;
+    createdAt: string;
+    billNumber: string | null;
+    billGrandTotal: number | null;
+    billPublicToken: string | null;
+  }[];
   runningTotal: number;
 }
 
@@ -280,6 +289,7 @@ export interface CustomerRequest {
   type: RequestType;
   note: string;
   status: 'OPEN' | 'ACKNOWLEDGED' | 'DONE';
+  raisedByUserId?: string | null;
   handledByUserId: string | null;
   handledAt: string | null;
   billId: string | null;
@@ -291,6 +301,8 @@ export interface CustomerRequest {
   mine?: boolean;
   billNumber?: string | null;
   billGrandTotal?: number | null;
+  /** Opens the digital bill — this is what the waiter shows the guest to scan. */
+  billPublicToken?: string | null;
 }
 
 export interface TaxLine {

@@ -17,11 +17,14 @@ export function signAccessToken(payload: AccessPayload): string {
   return jwt.sign(payload, env.ACCESS_TOKEN_SECRET, { expiresIn });
 }
 
+/**
+ * Resolves auth for incoming requests using Bearer JWT tokens only.
+ */
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
     const header = req.headers.authorization;
     const token = header && header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (!token) throw ApiError.unauthorized();
+    if (!token) throw ApiError.unauthorized('Please sign in to continue');
 
     let payload: AccessPayload;
     try {
@@ -30,7 +33,6 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       throw ApiError.unauthorized('Session expired, please sign in again');
     }
 
-    // Scope is always re-derived from the database, never from client input.
     const user = await UserModel.findById(payload.sub).select('name role status restaurantId').lean();
     if (!user) throw ApiError.unauthorized('Account not found');
     if (user.status !== 'ACTIVE') throw ApiError.forbidden('Account is suspended');
@@ -38,7 +40,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     req.auth = {
       userId: String(user._id),
       restaurantId: String(user.restaurantId),
-      role: user.role,
+      role: user.role as Role,
       name: user.name,
     };
     next();

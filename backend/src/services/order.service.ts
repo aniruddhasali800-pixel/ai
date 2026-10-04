@@ -11,8 +11,8 @@ import {
 import { emit, Events } from '../realtime/emit';
 import { ApiError } from '../utils/httpError';
 import { randomToken } from '../utils/tokens';
-import { setTableStatus, touchSession } from './table.service';
-import { notify, notifyRoles } from './notification.service';
+import { serializeTable, setTableStatus, takeTableForWaiter, touchSession } from './table.service';
+import { notifyRoles } from './notification.service';
 import { deductForOrder } from './inventory.service';
 import { recordAudit } from './audit.service';
 import {
@@ -22,8 +22,10 @@ import {
   type Role,
 } from '../types/constants';
 
-const SOURCE_PREFIX: Record<OrderSource, string> = {
-  DINE_IN_QR: 'D',
+/** Punches that belong to a party at a table, so they can join that table's running fire. */
+const MERGED_SOURCES: OrderSource[] = ['DINE_IN_QR', 'DINE_IN_WAITER'];
+
+const SOURCE_PREFIX: Record<OrderSource, string> = {  DINE_IN_QR: 'D',
   DINE_IN_WAITER: 'D',
   CASHIER: 'D',
   SWIGGY: 'S',
@@ -141,9 +143,76 @@ export interface CreateOrderInput {
   paymentStatus?: 'UNPAID' | 'PAID' | 'REFUNDED';
 }
 
-export async function createOrder(input: CreateOrderInput) {
+/**
+ * Punches aimed at one table are queued behind each other.
+ *
+ * Joining the running fire is a read-then-write, and now that every waiter may work every table
+ * two phones can tap Send in the same breath. Left alone each one reads "no open ticket" and the
+ * table is ordered twice again. The queue is per table session, so one busy party never holds up
+ * the rest of the floor.
+ */
+const punchQueues = new Map<string, Promise<unknown>>();
+
+export function createOrder(input: CreateOrderInput) {
+  if (!input.tableSessionId) return placeOrder(input);
+  const key = String(input.tableSessionId);
+  const tail = (punchQueues.get(key) ?? Promise.resolve()).then(() => placeOrder(input));
+  const settled = tail.then(
+    () => undefined,
+    () => undefined,
+  );
+  punchQueues.set(key, settled);
+  void settled.then(() => {
+    if (punchQueues.get(key) === settled) punchQueues.delete(key);
+  });
+  return tail;
+}
+
+async function placeOrder(input: CreateOrderInput) {
   const restaurant = await RestaurantModel.findById(input.restaurantId).lean();
   if (!restaurant) throw ApiError.notFound('Restaurant not found');
+
+  // ── Every waiter works every table ──────────────────────────────────
+  // Nobody is locked out of a punch. A table with no name on it yet takes the waiter who starts
+  // work on it, purely so the floor can show who to ask — the claim is conditional because two
+  // phones can tap at the same moment, and the label should be one name rather than a race result.
+  if (input.tableId && input.actor?.role === 'WAITER' && input.actor.userId) {
+    await takeTableForWaiter({
+      restaurantId: input.restaurantId,
+      tableId: String(input.tableId),
+      waiterId: input.actor.userId,
+    });
+  }
+
+  // ── One fire per table until the kitchen starts ─────────────────────
+  // A second Send on a party the pass has not begun is the same order grown, not a new ticket:
+  // a table that has been punched twice is two kitchens, two totals and a guest asking which
+  // plate is theirs. Once cooking has started the next punch is a real second round.
+  if (
+    input.tableSessionId &&
+    MERGED_SOURCES.includes(input.source) &&
+    !input.discount &&
+    !input.externalItems?.length &&
+    input.items?.length
+  ) {
+    const fire = await OrderModel.findOne({
+      restaurantId: input.restaurantId,
+      tableSessionId: input.tableSessionId,
+      status: { $in: ['PLACED', 'ACCEPTED'] },
+      billId: null,
+    })
+      .sort({ placedAt: -1 })
+      .lean();
+    if (fire) {
+      const merged = await addItemsToOrder(
+        input.restaurantId,
+        String(fire._id),
+        input.items,
+        input.actor ?? { userId: null, role: 'SYSTEM', name: 'Guest order' },
+      );
+      return { ...merged, merged: true };
+    }
+  }
 
   const isPublicFacing = PUBLIC_SOURCES.includes(input.source);
   if (isPublicFacing && !restaurant.settings?.acceptingOrders) {
@@ -238,31 +307,16 @@ export async function createOrder(input: CreateOrderInput) {
     if (session) {
       emit.toSession(session.publicToken, Events.ORDER_CREATED, payload);
     }
-    const waiterIds = table?.assignedWaiterId ? [String(table.assignedWaiterId)] : [];
     const title = `New order ${orderNumber}`;
-    if (waiterIds.length) {
-      await Promise.all(
-        waiterIds.map((id) =>
-          notify({
-            restaurantId,
-            recipientId: id,
-            type: 'ORDER_CREATED',
-            title,
-            body: `Table ${table?.number ?? ''} · ${lines.length} item(s)`,
-            entityType: 'Order',
-            entityId: String(order._id),
-          }),
-        ),
-      );
-    } else if (input.source === 'DINE_IN_QR') {
-      await notifyRoles(restaurantId, ['WAITER'], {
-        type: 'ORDER_CREATED',
-        title,
-        body: `Table ${table?.number ?? ''} placed a QR order`,
-        entityType: 'Order',
-        entityId: String(order._id),
-      });
-    }
+    // Every waiter works every table, so the whole floor is told a ticket is open — a guest or a
+    // colleague asking after it gets an answer from whoever is nearest.
+    await notifyRoles(restaurantId, ['WAITER'], {
+      type: 'ORDER_CREATED',
+      title,
+      body: `Table ${table?.number ?? ''} · ${lines.length} item(s)`,
+      entityType: 'Order',
+      entityId: String(order._id),
+    });
   }
 
   if (['SWIGGY', 'ZOMATO', 'WEBSITE'].includes(input.source)) {
@@ -290,7 +344,7 @@ export async function createOrder(input: CreateOrderInput) {
     });
   }
 
-  return order.toObject();
+  return { ...order.toObject(), merged: false };
 }
 
 export async function getOrder(restaurantId: string, orderId: string) {
@@ -448,25 +502,17 @@ export async function transitionOrder(
     if (next === 'READY' && table && !['BILL_REQUESTED', 'PAYMENT_PENDING'].includes(table.status)) {
       await setTableStatus(table._id, 'FOOD_READY');
       const readyTitle = `Order ${order.orderNumber} is ready`;
+      // The floor is open: any waiter runs the food to any table, so every waiter is rung rather
+      // than only the name on the card.
+      await notifyRoles(restaurantId, ['WAITER'], {
+        type: 'ORDER_READY',
+        title: readyTitle,
+        body: `Pick up for table ${table.number}`,
+        entityType: 'Order',
+        entityId: String(order._id),
+      });
       if (table.assignedWaiterId) {
-        await notify({
-          restaurantId,
-          recipientId: String(table.assignedWaiterId),
-          type: 'ORDER_READY',
-          title: readyTitle,
-          body: `Pick up for table ${table.number}`,
-          entityType: 'Order',
-          entityId: String(order._id),
-        });
         emit.toWaiter(String(table.assignedWaiterId), Events.ORDER_READY, payload);
-      } else {
-        await notifyRoles(restaurantId, ['WAITER'], {
-          type: 'ORDER_READY',
-          title: readyTitle,
-          body: `Pick up for table ${table.number}`,
-          entityType: 'Order',
-          entityId: String(order._id),
-        });
       }
     }
     if (next === 'SERVED' && table) {
@@ -522,6 +568,11 @@ export async function addItemsToOrder(
     throw ApiError.conflict('You cannot add items to a closed order');
   }
   if (order.billId) throw ApiError.conflict('This order has already been billed');
+
+  // ── Every waiter works every table ──────────────────────────────────
+  if (actor.role === 'WAITER' && actor.userId && order.tableId) {
+    await takeTableForWaiter({ restaurantId, tableId: String(order.tableId), waiterId: actor.userId });
+  }
 
   const restaurant = await RestaurantModel.findById(restaurantId).lean();
   if (!restaurant) throw ApiError.notFound('Restaurant not found');

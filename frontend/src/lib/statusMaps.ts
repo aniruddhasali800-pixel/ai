@@ -135,6 +135,7 @@ export const REQUEST_LABEL: Record<string, { label: string; emoji: string }> = {
   NAPKIN: { label: 'Napkins', emoji: '🧻' },
   BILL: { label: 'Bill please', emoji: '🧾' },
   CASH_PAYMENT: { label: 'Pay by cash', emoji: '💵' },
+  TABLE_CLEAR: { label: 'Table clear', emoji: '🧹' },
   OTHER: { label: 'Assistance', emoji: '✋' },
 };
 

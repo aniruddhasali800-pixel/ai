@@ -10,6 +10,10 @@ const SHELL = [
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/maskable-512.png',
+  '/icons/kitchen-icon.svg',
+  '/icons/waiter-icon.svg',
+  '/icons/cashier-icon.svg',
+  '/icons/owner-icon.svg',
 ];
 
 // The shell is precached so an installed app (or a scanned table QR) opens with no signal.

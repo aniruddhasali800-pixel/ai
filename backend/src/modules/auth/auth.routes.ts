@@ -86,8 +86,9 @@ authRouter.post(
 authRouter.post(
   '/logout',
   requireAuth,
+  validate({ body: z.object({ refreshToken: z.string().min(10).nullish() }) }),
   asyncHandler(async (req, res) => {
-    await logout(req.auth!.userId);
+    await logout(req.auth!.userId, req.body.refreshToken ?? undefined);
     res.json({ ok: true });
   }),
 );

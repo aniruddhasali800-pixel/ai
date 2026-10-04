@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AuthResult, Restaurant, User } from '../lib/types';
 import { http } from '../lib/api';
+import { disconnectRealtime } from '../lib/socket';
 
 interface AuthState {
   user: User | null;
@@ -63,8 +64,13 @@ export const useAuth = create<AuthState>()(
       },
 
       logout() {
-        const token = get().accessToken;
-        if (token) void http.post('/auth/logout').catch(() => undefined);
+        const { accessToken, refreshToken } = get();
+        // The refresh token goes along so the server ends this device only; the counter tablet
+        // signed in with the same job account must keep its session.
+        if (accessToken) void http.post('/auth/logout', { refreshToken }).catch(() => undefined);
+        // The socket is a member of rooms keyed to this identity; leaving them stops the next
+        // person on this device being told about the previous one's tables.
+        disconnectRealtime();
         set({ user: null, restaurant: null, accessToken: null, refreshToken: null, ready: true });
       },
 
@@ -83,6 +89,9 @@ export const useAuth = create<AuthState>()(
     {
       name: 'sizzle.auth',
       partialize: (s) => ({ user: s.user, restaurant: s.restaurant, accessToken: s.accessToken, refreshToken: s.refreshToken }),
+      onRehydrateStorage: () => (state) => {
+        if (state) state.ready = true;
+      },
     },
   ),
 );
@@ -104,7 +113,8 @@ export const PERMISSIONS: Record<string, string[]> = {
   WAITER: [
     'menu:read', 'orders:read', 'orders:write', 'orders:status', 'tables:read', 'tables:write',
     'bookings:read', 'bookings:write', 'requests:read', 'requests:write',
-    'billing:read', 'billing:write', 'payments:read', 'payments:write',
+    // Matches the server: a waiter carries cash but the counter owns marking it paid.
+    'billing:read', 'billing:write', 'payments:read',
   ],
 };
 

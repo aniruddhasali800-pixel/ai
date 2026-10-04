@@ -22,9 +22,12 @@ export const http: AxiosInstance = axios.create({
   withCredentials: false,
 });
 
+/** Attach the local JWT access token to every request. */
 http.interceptors.request.use((config) => {
-  const token = useAuth.getState().accessToken;
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  const localToken = useAuth.getState().accessToken;
+  if (localToken && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${localToken}`;
+  }
   return config;
 });
 
@@ -51,16 +54,23 @@ http.interceptors.response.use(
   async (error: AxiosError) => {
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     const status = error.response?.status;
-    const isAuthRoute = original?.url?.includes('/auth/login') || original?.url?.includes('/auth/refresh');
+    const isAuthRoute =
+      original?.url?.includes('/auth/login') ||
+      original?.url?.includes('/auth/refresh') ||
+      original?.url?.includes('/auth/me');
+
     if (status === 401 && original && !original._retry && !isAuthRoute) {
-      original._retry = true;
-      try {
-        if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => (refreshPromise = null));
-        const token = await refreshPromise;
-        original.headers.Authorization = `Bearer ${token}`;
-        return http(original);
-      } catch {
-        return Promise.reject(error);
+      const state = useAuth.getState();
+      if (state.refreshToken) {
+        original._retry = true;
+        try {
+          if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => (refreshPromise = null));
+          const token = await refreshPromise;
+          original.headers.Authorization = `Bearer ${token}`;
+          return http(original);
+        } catch {
+          return Promise.reject(error);
+        }
       }
     }
     return Promise.reject(error);

@@ -76,7 +76,7 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export const BILL_STATUSES = ['ISSUED', 'PAID', 'VOID', 'REFUNDED'] as const;
 export type BillStatus = (typeof BILL_STATUSES)[number];
 
-export const REQUEST_TYPES = ['CALL_WAITER', 'WATER', 'PLATE', 'CUTLERY', 'NAPKIN', 'BILL', 'CASH_PAYMENT', 'OTHER'] as const;
+export const REQUEST_TYPES = ['CALL_WAITER', 'WATER', 'PLATE', 'CUTLERY', 'NAPKIN', 'BILL', 'CASH_PAYMENT', 'TABLE_CLEAR', 'OTHER'] as const;
 export type RequestType = (typeof REQUEST_TYPES)[number];
 
 export const INVENTORY_UNITS = ['KG', 'G', 'L', 'ML', 'PCS', 'PACKET'] as const;

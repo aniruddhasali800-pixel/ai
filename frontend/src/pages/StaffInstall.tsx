@@ -9,22 +9,19 @@ import {
   Share2,
   ShieldAlert,
   ArrowRight,
-  Flame,
-  Armchair,
-  CreditCard,
-  ShieldCheck,
   Sparkles,
   LogIn,
   Briefcase,
-  Utensils,
+  Monitor,
 } from 'lucide-react';
 import { Brand } from '../layouts/AppShell';
-import { Button } from '../components/ui';
+import { Button, Modal } from '../components/ui';
 import { useAuth } from '../store/auth';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import { useTitle } from '../hooks/useTitle';
 import { homeFor } from './Login';
 import { OPERATIONS_SYSTEMS } from '../components/OperationsAppModal';
+import { downloadDesktopShortcut, downloadWindowsAppLauncher } from '../lib/installShortcuts';
 
 /**
  * Operations App & 4 Dashboards Launcher.
@@ -37,6 +34,8 @@ export function StaffInstall() {
   const slug = params.get('r') ?? '';
   const { canInstall, promptInstall, installed, needsManualInstall } = useInstallPrompt();
   const [platform, setPlatform] = useState<'computer' | 'mobile'>('computer');
+  // Auto-appears when opening the page so the user can immediately install with one click
+  const [installModalOpen, setInstallModalOpen] = useState(true);
 
   useTitle('Sizzle Operations OS — Staff Dashboards');
 
@@ -66,11 +65,30 @@ export function StaffInstall() {
             Install the web-based app icon on your computer or mobile device to launch the Kitchen System, Waiter System,
             Cashier Till, and Owner Dashboard.
           </p>
+          <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Download size={16} />}
+              onClick={() => setInstallModalOpen(true)}
+              className="shadow-lg shadow-ember-500/25"
+            >
+              Install Operations OS
+            </Button>
+            <Button
+              variant="secondary"
+              size="md"
+              icon={<Laptop size={15} />}
+              onClick={() => downloadWindowsAppLauncher('Sizzle-Operations-OS', '/staff.html')}
+            >
+              Desktop Launcher (.bat)
+            </Button>
+          </div>
         </div>
       </header>
 
       {/* Main Container */}
-      <main className="mx-auto -mt-12 max-w-2xl space-y-4 px-4">
+      <main className="mx-auto -mt-10 max-w-2xl space-y-4 px-4">
         {/* Security Warning Notice */}
         <div className="card flex items-start gap-3 border-l-4 border-l-amber-500 bg-amber-50/90 p-4 text-amber-950">
           <ShieldAlert size={22} className="mt-0.5 shrink-0 text-amber-600" />
@@ -147,8 +165,26 @@ export function StaffInstall() {
                 <p className="text-[12.5px] leading-relaxed text-ink-600">
                   In Chrome or Edge, look for the <span className="font-semibold text-ink-800">Install app icon</span> (⊞ or ⬇)
                   in your browser's address bar at the top-right. Click it to install Sizzle Operations with a desktop shortcut
-                  and taskbar icon.
+                  and taskbar icon. You can also download dedicated Windows launcher scripts below.
                 </p>
+                <div className="flex flex-wrap items-center gap-2 pt-1.5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Download size={14} />}
+                    onClick={() => downloadWindowsAppLauncher('Sizzle-Operations-OS', '/staff.html')}
+                  >
+                    Download Windows Launcher (.bat)
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<ExternalLink size={13} />}
+                    onClick={() => downloadDesktopShortcut('Sizzle Operations OS', '/staff.html')}
+                  >
+                    Download Desktop Shortcut (.url)
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -227,17 +263,28 @@ export function StaffInstall() {
                     <p className="text-[12.5px] leading-relaxed text-ink-600">{sys.description}</p>
                   </div>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-ink-100 pt-3">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 pt-3">
                     <span className="font-mono text-[11px] text-ink-400">{sys.url}</span>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      className="gap-1.5 text-[12px]"
-                      onClick={() => openSystem(sys.url)}
-                    >
-                      <span>Launch System</span>
-                      <ExternalLink size={12} />
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="px-2 text-[11px]"
+                        title="Download Windows shortcut for this system"
+                        onClick={() => downloadWindowsAppLauncher(sys.name, sys.url)}
+                      >
+                        <Laptop size={12} className="mr-1" /> .bat
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        className="gap-1 text-[12px]"
+                        onClick={() => openSystem(sys.url)}
+                      >
+                        <span>Launch</span>
+                        <ExternalLink size={12} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -288,6 +335,110 @@ export function StaffInstall() {
           Sizzle Operations OS · High-Reliability Multi-Tenant Restaurant System
         </p>
       </main>
+
+      {/* Instant Auto-Appearing Install Window / Modal */}
+      <Modal
+        open={installModalOpen}
+        onClose={() => setInstallModalOpen(false)}
+        title="Install Sizzle Operations OS"
+        width="max-w-xl"
+        footer={
+          <div className="flex w-full items-center justify-between">
+            <Button variant="ghost" size="sm" onClick={() => setInstallModalOpen(false)}>
+              Explore Dashboards Without Installing
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setInstallModalOpen(false)}>
+              Dismiss
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3.5 rounded-2xl bg-gradient-to-r from-ink-900 to-ink-800 p-4 text-white shadow-md">
+            <img src="/icons/icon-192.png" alt="Sizzle OS" className="h-14 w-14 shrink-0 rounded-2xl shadow-md ring-2 ring-white/20" />
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display text-[18px] font-800">Sizzle Operations OS</h3>
+              <p className="text-[12.5px] text-ink-300">
+                One install adds all 4 operational dashboards to your computer desktop or mobile screen.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-ink-200 bg-ink-50/70 p-3.5">
+            <p className="text-[13px] font-semibold text-ink-800">4 Operational Systems Included:</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[12px]">
+              <div className="flex items-center gap-1.5 text-ink-700 font-medium">
+                <span className="text-amber-600 font-bold">🍳</span> Kitchen System (KDS)
+              </div>
+              <div className="flex items-center gap-1.5 text-ink-700 font-medium">
+                <span className="text-blue-600 font-bold">🛎️</span> Waiter Floor System
+              </div>
+              <div className="flex items-center gap-1.5 text-ink-700 font-medium">
+                <span className="text-emerald-600 font-bold">💳</span> Cashier POS Till
+              </div>
+              <div className="flex items-center gap-1.5 text-ink-700 font-medium">
+                <span className="text-purple-600 font-bold">📊</span> Owner &amp; Manager Office
+              </div>
+            </div>
+          </div>
+
+          {/* Big One-Click Action Buttons */}
+          <div className="space-y-2 pt-1">
+            {canInstall ? (
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full text-[15px] font-bold shadow-md shadow-ember-500/25"
+                icon={<Download size={18} />}
+                onClick={async () => {
+                  await promptInstall();
+                  setInstallModalOpen(false);
+                }}
+              >
+                Install App in Browser / System Now
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-full text-[15px] font-bold shadow-md shadow-ember-500/25"
+                icon={<Monitor size={18} />}
+                onClick={() => {
+                  downloadWindowsAppLauncher('Sizzle-Operations-OS', '/staff.html');
+                }}
+              >
+                Download Windows Desktop App Launcher (.bat)
+              </Button>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                size="md"
+                className="flex-1 text-[12.5px]"
+                icon={<Laptop size={15} />}
+                onClick={() => downloadWindowsAppLauncher('Sizzle-Operations-OS', '/staff.html')}
+              >
+                Windows Launcher (.bat)
+              </Button>
+              <Button
+                variant="secondary"
+                size="md"
+                className="flex-1 text-[12.5px]"
+                icon={<ExternalLink size={14} />}
+                onClick={() => downloadDesktopShortcut('Sizzle Operations OS', '/staff.html')}
+              >
+                Desktop Shortcut (.url)
+              </Button>
+            </div>
+          </div>
+
+          {/* Quick instructions for iPhone and Android */}
+          <div className="rounded-xl bg-ink-100/70 p-3 text-[12px] leading-relaxed text-ink-600">
+            <strong>Mobile Install:</strong> On iPhone Safari, tap <strong>Share [↑]</strong> → <strong>Add to Home Screen [+]</strong>. On Android Chrome, tap <strong>Install App</strong> or <strong>Add to Home screen</strong>.
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

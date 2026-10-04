@@ -13,7 +13,9 @@ const BOARD_COLUMNS: { key: OrderStatus; label: string; accent: string; next?: O
   { key: 'PLACED', label: 'New', accent: 'border-t-ember-500', next: 'ACCEPTED', nextLabel: 'Start' },
   { key: 'ACCEPTED', label: 'Queued', accent: 'border-t-amber-500', next: 'PREPARING', nextLabel: 'Fire' },
   { key: 'PREPARING', label: 'On the fire', accent: 'border-t-blue-500', next: 'READY', nextLabel: 'Ready' },
-  { key: 'READY', label: 'Ready to pass', accent: 'border-t-leaf-500', next: 'SERVED', nextLabel: 'Hand off' },
+  // No action here: the pass ends at READY. A waiter or the till carries the ticket off the board,
+  // so a "hand off" button on the cook's screen could only ever be refused by the server.
+  { key: 'READY', label: 'Ready to pass', accent: 'border-t-leaf-500' },
 ];
 
 const STATIONS: (Station | 'ALL')[] = ['ALL', 'MAIN', 'GRILL', 'TANDOOR', 'FRY', 'BAR', 'DESSERT'];

@@ -136,6 +136,10 @@ tablesRouter.patch(
     if (req.body.status === 'AVAILABLE') {
       extra.lastCleanedAt = new Date();
       extra.activeSessionId = null;
+      // The seat is free, so nobody works it. Left behind, the name on a cleared table
+      // sends the next guest's QR seating to a waiter who has gone home — and locks the
+      // rest of the floor out of claiming it.
+      extra.assignedWaiterId = null;
       await TableSessionModel.updateMany(
         { tableId: table._id, status: { $ne: 'CLOSED' } },
         { status: 'CLOSED', closedAt: new Date() },

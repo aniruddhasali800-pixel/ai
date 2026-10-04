@@ -12,9 +12,14 @@ const userSchema = new Schema(
     /** The same phone with everything but digits removed, so a code request can find an
      *  account however the number was typed when it was created. */
     phoneDigits: { type: String, index: true },
-    passwordHash: { type: String, required: true, select: false },
+    /** Not `required`: refreshing and signing out read the row for its tokens only, and saving
+     *  that document would fail validation if Mongoose demanded a hash it was never allowed to
+     *  see. Sign-in selects the field and refuses when it is absent. */
+    passwordHash: { type: String, select: false },
     status: { type: String, enum: ['ACTIVE', 'SUSPENDED'], default: 'ACTIVE' },
-    refreshTokenHash: { type: String, select: false },
+    /** One hash per signed-in device, newest last. A floor phone and the counter screen run the
+     *  same job account, so a fresh sign-in must not end the session already on that account. */
+    refreshTokens: { type: [String], select: false, default: [] },
     lastLoginAt: { type: Date },
   },
   { timestamps: true },

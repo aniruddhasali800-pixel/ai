@@ -15,6 +15,7 @@ export function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (user) return <Navigate to="/app" replace />;
+
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   async function submit(e: FormEvent) {
@@ -37,9 +38,12 @@ export function RegisterPage() {
       <div className="w-full max-w-md">
         <div className="flex justify-center"><Brand /></div>
         <div className="card mt-6 p-6">
-          <h1 className="font-display text-xl font-800 tracking-tight text-ink-900">Onboard a restaurant</h1>
+          <div className="flex items-center justify-between">
+            <h1 className="font-display text-xl font-800 tracking-tight text-ink-900">Create an account</h1>
+          </div>
           <p className="mt-1 text-[13px] text-ink-500">Creates the tenant, your owner seat, a default menu skeleton and table QR codes.</p>
-          <form onSubmit={submit} className="mt-5 space-y-3.5">
+
+          <form onSubmit={submit} className="mt-4 space-y-3.5">
             <Field label="Restaurant name" required>
               <Input value={form.restaurantName} onChange={set('restaurantName')} placeholder="Saffron & Smoke" required />
             </Field>
@@ -63,7 +67,7 @@ export function RegisterPage() {
             {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700 ring-1 ring-red-200">{error}</p>}
             <div className="flex gap-2 pt-1">
               <Link to="/login" className="grow">
-                <Button variant="ghost" className="w-full" icon={<ArrowLeft size={15} />}>Back</Button>
+                <Button variant="ghost" className="w-full" icon={<ArrowLeft size={15} />}>Back to sign in</Button>
               </Link>
               <Button type="submit" variant="primary" loading={busy} className="grow" icon={<ArrowRight size={15} />}>
                 Create account

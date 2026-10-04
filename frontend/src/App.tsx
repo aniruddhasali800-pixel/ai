@@ -54,11 +54,14 @@ export function App() {
         {/* One installable app for the whole team; the account decides the screen */}
         <Route path="/staff.html" element={<StaffInstall />} />
 
+        {/* ── Protected staff routes — must be signed in ── */}
+
         {/* Back office — owner & manager */}
         <Route path="/app" element={<StaffLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="orders" element={<OrdersPage />} />
           <Route path="orders/:id" element={<OrderDetailPage />} />
+          <Route path="requests" element={<PosRequests />} />
           <Route path="tables" element={<TablesPage />} />
           <Route path="menu" element={<MenuPage />} />
           <Route path="bookings" element={<BookingsPage />} />
@@ -74,18 +77,20 @@ export function App() {
         <Route path="/kds" element={<KdsLayout />}>
           <Route index element={<KdsBoard />} />
         </Route>
+
         <Route path="/floor" element={<FloorLayout />}>
           <Route index element={<WaiterFloor />} />
           <Route path="map" element={<FloorMap />} />
           <Route path="order" element={<NewOrder />} />
           <Route path="bookings" element={<BookingsPage />} />
         </Route>
+
         <Route path="/pos" element={<PosLayout />}>
           <Route index element={<BillsPage />} />
           <Route path="requests" element={<PosRequests />} />
         </Route>
 
-        {/* Guest flows — no auth */}
+        {/* Guest flows — no auth required */}
         <Route path="/eat" element={<AppLanding />} />
         <Route path="/eat/:slug" element={<CustomerApp />} />
         <Route path="/track/:token" element={<AppTrack />} />
@@ -94,7 +99,6 @@ export function App() {
         <Route path="/s/:publicToken" element={<GuestSession />} />
         <Route path="/bill/:billToken" element={<GuestBill />} />
         <Route path="/book/:slug" element={<PublicBooking />} />
-        {/* A walk-in's side of the staff sticker: ask for a shift, no account needed */}
         <Route path="/apply/:slug" element={<ApplyJob />} />
 
         <Route path="/" element={<Hub />} />

@@ -1,6 +1,15 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { ArrowRight, ChefHat, CreditCard, FlaskConical, ShieldCheck, ConciergeBell, ClipboardList, MessageSquareText } from 'lucide-react';
+import {
+  ArrowRight,
+  ChefHat,
+  CreditCard,
+  FlaskConical,
+  ShieldCheck,
+  ConciergeBell,
+  ClipboardList,
+  MessageSquareText,
+} from 'lucide-react';
 import { Brand } from '../layouts/AppShell';
 import { Button, Field, Input, SegmentedControl } from '../components/ui';
 import { useAuth } from '../store/auth';
@@ -18,7 +27,7 @@ const DEMO: { role: Role; label: string; email: string; icon: typeof ChefHat; bl
 ];
 
 export function LoginPage() {
-  const { user, login, loginWithCode } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState<'password' | 'code'>('password');
   const [identifier, setIdentifier] = useState('owner@sizzle.test');
@@ -28,7 +37,7 @@ export function LoginPage() {
 
   if (user) return <Navigate to={homeFor(user.role)} replace />;
 
-  /** Both doors land in the same place: the session is real, so open that account's screen. */
+  /** After a successful login, open the right station screen. */
   async function finish() {
     const u = useAuth.getState().user;
     connectRealtime(useAuth.getState().accessToken);
@@ -66,33 +75,19 @@ export function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
-      {/* Brand panel */}
-      <div className="relative hidden overflow-hidden bg-ink-900 p-12 text-white lg:flex lg:flex-col lg:justify-between">
-        <div
-          className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full opacity-40 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #ea580c, transparent 65%)' }}
-        />
-        <div
-          className="pointer-events-none absolute -bottom-32 left-0 h-80 w-80 rounded-full opacity-25 blur-3xl"
-          style={{ background: 'radial-gradient(circle, #eab308, transparent 70%)' }}
-        />
-        <Brand light />
-        <div className="relative max-w-md">
-          <h2 className="font-display text-[38px] font-800 leading-[1.05] tracking-tight">
-            One screen for the whole floor.
+    <div className="grid min-h-screen lg:grid-cols-2">
+      {/* Decorative / branding panel */}
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-ink-950 p-12 text-white lg:flex">
+        <div className="relative z-10">
+          <Brand light />
+        </div>
+        <div className="relative z-10 max-w-md space-y-4">
+          <h2 className="font-display text-3xl font-800 tracking-tight text-white sm:text-4xl">
+            Live orders, active tables and clear bills.
           </h2>
-          <p className="mt-4 text-[15px] leading-relaxed text-ink-300">
-            QR ordering, kitchen display, waiter routing and table billing — every action pushes to everyone
-            online in real time, so the pass never shouts across the room.
+          <p className="text-[15px] leading-relaxed text-ink-300">
+            One system for floor, counter and kitchen. Pick your role to see the exact interface built for that station.
           </p>
-          <div className="mt-8 flex flex-wrap gap-2">
-            {['Live order rail', 'Table map', 'Kitchen firing', 'Digital bills', 'GST billing', 'Audit trail'].map((t) => (
-              <span key={t} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[12px] font-medium text-ink-200">
-                {t}
-              </span>
-            ))}
-          </div>
         </div>
         <p className="relative text-[12px] text-ink-500">Saffron &amp; Smoke · Pune · a Sizzle demo tenant</p>
       </div>
@@ -110,9 +105,9 @@ export function LoginPage() {
             <SegmentedControl
               size="sm"
               value={mode}
-              onChange={setMode}
+              onChange={(v) => setMode(v as 'password' | 'code')}
               options={[
-                { value: 'password', label: 'Email or phone' },
+                { value: 'password', label: 'Email / Demo' },
                 { value: 'code', label: 'One-time code' },
               ]}
             />
@@ -121,10 +116,23 @@ export function LoginPage() {
           {mode === 'password' ? (
             <form onSubmit={submit} className="mt-5 space-y-4">
               <Field label="Email or phone">
-                <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="you@sizzle.test" autoComplete="username" required />
+                <Input
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="you@sizzle.test"
+                  autoComplete="username"
+                  required
+                />
               </Field>
               <Field label="Password">
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" autoComplete="current-password" required />
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
               </Field>
               {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700 ring-1 ring-red-200">{error}</p>}
               <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy} icon={<ArrowRight size={16} />}>
@@ -139,7 +147,7 @@ export function LoginPage() {
             <>
               <div className="my-6 flex items-center gap-3">
                 <span className="h-px flex-1 bg-ink-200" />
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-400">Demo accounts</span>
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-400">Demo accounts (1-tap)</span>
                 <span className="h-px flex-1 bg-ink-200" />
               </div>
 
@@ -276,6 +284,7 @@ function CodeForm({ onDone }: { onDone: () => Promise<void> | void }) {
   );
 }
 
+/** Maps a staff role to their home route — used by every post-login redirect. */
 export function homeFor(role: Role): string {
   switch (role) {
     case 'KITCHEN':

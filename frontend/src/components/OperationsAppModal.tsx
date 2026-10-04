@@ -17,6 +17,7 @@ import {
 import { Modal, Button } from './ui';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import { useAuth } from '../store/auth';
+import { downloadDesktopShortcut, downloadWindowsAppLauncher } from '../lib/installShortcuts';
 
 export interface OperationsAppModalProps {
   open: boolean;
@@ -160,7 +161,7 @@ export function OperationsAppModal({ open, onClose, slug, qrDataUrl }: Operation
                   <h4 className="text-[13px] font-bold text-ink-800">Computer Desktop App (Windows / Mac)</h4>
                   <p className="mt-0.5 text-[12px] leading-relaxed text-ink-600">
                     Running in Chrome, Edge, or Brave: click the <span className="font-semibold">Install icon</span> in
-                    your browser address bar (top-right) to pin Sizzle Operations to your desktop and taskbar as a standalone window.
+                    your browser address bar (top-right) or use the buttons below to install/download desktop launchers.
                   </p>
                 </div>
               ) : (
@@ -173,16 +174,39 @@ export function OperationsAppModal({ open, onClose, slug, qrDataUrl }: Operation
                 </div>
               )}
 
-              {canInstall && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={<Download size={14} />}
-                  onClick={() => void promptInstall()}
-                >
-                  Install App Now
-                </Button>
-              )}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {canInstall && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Download size={14} />}
+                    onClick={() => void promptInstall()}
+                  >
+                    Install Browser App Icon
+                  </Button>
+                )}
+                {platform === 'computer' && (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Laptop size={14} />}
+                      onClick={() => downloadWindowsAppLauncher('Sizzle-Operations-OS', '/staff.html')}
+                    >
+                      Download Desktop Launcher (.bat)
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<ExternalLink size={13} />}
+                      onClick={() => downloadDesktopShortcut('Sizzle Operations OS', '/staff.html')}
+                    >
+                      Download Desktop Shortcut (.url)
+                    </Button>
+                  </>
+                )}
+              </div>
+
               {installed && (
                 <div className="flex items-center gap-1.5 text-[12px] font-semibold text-leaf-700">
                   <Check size={14} /> App already installed on this device

@@ -25,7 +25,9 @@ export function useRealtimeShell() {
   });
 
   const onOrder = (o: Order) => {
-    invalidateMany(['orders', 'kds', 'floor', 'reports', 'dashboard']);
+    // 'waiter' is the shift summary and 'hub' the public landing tiles: both are derived from the
+    // same tickets, and a screen nobody revisits must not keep showing yesterday's counts.
+    invalidateMany(['orders', 'kds', 'floor', 'reports', 'dashboard', 'waiter', 'hub']);
     if (!o?.orderNumber) return;
     // Only ping the roles that actually act on the ticket.
     if (role === 'KITCHEN' && o.status === 'PLACED') push({ kind: 'event', title: `New ticket ${o.orderNumber}`, body: `${o.items.length} item(s)` });
@@ -41,16 +43,16 @@ export function useRealtimeShell() {
 
   useRealtimeEvent('delivery.order', () => invalidateMany(['orders', 'kds', 'reports', 'dashboard']));
 
-  const onTable = () => invalidateMany(['floor', 'tables', 'dashboard']);
+  const onTable = () => invalidateMany(['floor', 'tables', 'dashboard', 'waiter', 'hub']);
   useRealtimeEvent('table.updated', onTable);
   useRealtimeEvent('table.cleaned', onTable);
   useRealtimeEvent('table.available', onTable);
 
-  const onBill = () => invalidateMany(['bills', 'reports', 'dashboard', 'payments']);
+  const onBill = () => invalidateMany(['bills', 'reports', 'dashboard', 'payments', 'floor', 'hub']);
   useRealtimeEvent('bill.created', onBill);
   useRealtimeEvent('bill.updated', onBill);
   useRealtimeEvent('bill.paid', onBill);
-  useRealtimeEvent('bill.requested', () => invalidate('floor'));
+  useRealtimeEvent('bill.requested', () => invalidateMany(['floor', 'waiter']));
 
   const onPayment = (payload: { amount?: number; method?: string }) => {
     invalidateMany(['payments', 'bills', 'reports', 'dashboard']);
@@ -68,13 +70,15 @@ export function useRealtimeShell() {
   useRealtimeEvent('booking.reminder', onBooking);
 
   const onRequest = (r?: { tableNumber?: string; type?: string }) => {
-    invalidateMany(['requests', 'floor']);
+    invalidateMany(['requests', 'floor', 'waiter', 'hub']);
     if (role === 'WAITER' && r?.type) {
       push({ kind: 'event', title: `Table ${r.tableNumber ?? ''}`, body: r.type.replace(/_/g, ' ').toLowerCase() });
     }
   };
   useRealtimeEvent('customer.requested', onRequest);
-  useRealtimeEvent('request.updated', () => invalidateMany(['requests', 'floor']));
+  // An update is usually the counter answering a call the floor already knows about — repaint, do
+  // not ping the waiter with the news they just caused.
+  useRealtimeEvent('request.updated', () => invalidateMany(['requests', 'floor', 'waiter', 'hub']));
 
   useRealtimeEvent('menu.updated', () => invalidate('menu'));
   useRealtimeEvent('staff.updated', () => invalidate('staff'));

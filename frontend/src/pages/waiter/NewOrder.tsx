@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Minus, Plus, ShoppingBag, ShoppingBasket, Trash2 } from 'lucide-react';
+import { Minus, Plus, ShoppingBag, ShoppingBasket, Trash2, Users } from 'lucide-react';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
 import type { MenuBundle, Order, Table, WaiterTable } from '../../lib/types';
@@ -21,7 +21,7 @@ interface Draft {
 export function NewOrder() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { restaurant } = useAuth();
+  const { restaurant, user } = useAuth();
   const presetTable = params.get('table');
   const { data: menu, loading: menuLoading } = useQuery<MenuBundle>('menu', '/menu');
   const { data: floor } = useQuery<{ data: WaiterTable[] }>('floor:map', '/waiters/map');
@@ -43,8 +43,15 @@ export function NewOrder() {
   const cat = activeCat ?? categories[0]?._id ?? '';
   const list = useMemo(() => products.filter((p) => p.categoryId === cat && p.isActive), [products, cat]);
 
+  const isWaiter = user?.role === 'WAITER';
   const tables = (floor?.data ?? bare?.data ?? []) as (WaiterTable & { session?: { customerName?: string } | null })[];
   const seatable = tables.filter((t) => t.session || t.status === 'AVAILABLE' || t.status === 'RESERVED');
+
+  // Every waiter works every table. The name on one says who opened the party, and a punch here
+  // joins the ticket already running rather than starting a second one.
+  const selectedTable = tableId ? tables.find((t) => t._id === tableId) : null;
+  const otherWaiterTable =
+    isWaiter && selectedTable?.assignedWaiterId && !selectedTable.mine ? (selectedTable as WaiterTable) : null;
 
   const total = draft.reduce((sum, d) => {
     const addons = d.addonIds.reduce((a, id) => a + (menu?.addons.find((x) => x._id === id)?.price ?? 0), 0);
@@ -85,12 +92,17 @@ export function NewOrder() {
         notes: notes || undefined,
         items: draft.map((d) => ({ productId: d.productId, qty: d.qty, addonIds: d.addonIds, notes: d.notes || undefined })),
       };
-      const { data } = await http.post<Order>('/orders', body);
+      const { data } = await http.post<Order & { merged?: boolean }>('/orders', body);
       invalidate('orders');
       invalidate('floor');
       invalidate('kds');
       invalidate('tables');
-      toast(`${data.orderNumber} sent to the kitchen`, 'success');
+      toast(
+        data.merged
+          ? `Added to ${data.orderNumber} — that table has one fire running`
+          : `${data.orderNumber} sent to the kitchen`,
+        'success',
+      );
       setDraft([]);
       setNotes('');
       if (takeaway) { setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); }
@@ -115,11 +127,15 @@ export function NewOrder() {
               else { setTakeaway(false); setTableId(e.target.value); }
             }}>
               <option value="">Choose a table…</option>
-              {seatable.map((t) => (
-                <option key={t._id} value={t._id}>
-                  Table {t.number} · {t.section}{t.session ? ` · ${t.session.customerName || 'seated'}` : ' · free'}
-                </option>
-              ))}
+              {seatable.map((t) => {
+                const waiterName = (t as WaiterTable).assignedWaiterName;
+                const named = waiterName && !(t as WaiterTable).mine ? ` · with ${waiterName}` : '';
+                return (
+                  <option key={t._id} value={t._id}>
+                    {`Table ${t.number} · ${t.section}${t.session ? ` · ${(t.session as { customerName?: string }).customerName || 'seated'}` : ' · free'}${named}`}
+                  </option>
+                );
+              })}
               <option value="takeaway">Takeaway / counter</option>
             </Select>
           </label>
@@ -146,6 +162,16 @@ export function NewOrder() {
           </div>
         )}
       </div>
+
+      {otherWaiterTable && !takeaway && (
+        <div className="flex items-start gap-2.5 rounded-xl bg-ink-50 px-3.5 py-3 ring-1 ring-ink-200">
+          <Users size={15} className="mt-0.5 shrink-0 text-ink-600" />
+          <p className="text-[13px] text-ink-700">
+            <span className="font-semibold">Table {otherWaiterTable.number} is being run by {otherWaiterTable.assignedWaiterName ?? 'a colleague'}.</span>{' '}
+            Anything you punch here lands on the same ticket, so the party is billed once.
+          </p>
+        </div>
+      )}
 
       <nav className="flex gap-1.5 overflow-x-auto pb-1">
         {categories.map((c) => (
