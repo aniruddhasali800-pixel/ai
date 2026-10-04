@@ -184,7 +184,8 @@ The important ones:
 - `ACCESS_TOKEN_SECRET` / `REFRESH_TOKEN_SECRET` — change both before deploying anywhere.
 - `PUBLIC_BASE_URL` — the host printed into QR codes and guest bill links. On a deployed
   instance it is never allowed to be a laptop address, since no customer's phone can open one;
-  the API falls back to the host the platform publishes and says so at boot.
+  left unset it becomes the demo client's own domain, because those links are pages and the API
+  host serves none.
 - `PAYMENT_WEBHOOK_SECRET`, `SWIGGY_WEBHOOK_SECRET`, `ZOMATO_WEBHOOK_SECRET` — HMAC keys the
   gateway and partners sign with; every webhook body is compared against the signature before it
   is trusted.
@@ -199,8 +200,10 @@ deep links like `/app/orders`. Because the browser talks to a single origin, `/a
 **Render.** `render.yaml` is a Blueprint (**New → Blueprint**, point it at this repo); on a service
 you created by hand, set root directory `backend`, build `npm install && npm run build`, start
 `node dist/server.js`, health check `/api/health`. The host tells the app its own public URL through
-`RENDER_EXTERNAL_URL`, and the config reads it — so the socket allowlist and every QR code, guest
-bill link and booking link come out pointing at the deployed domain without any variable to fill in.
+`RENDER_EXTERNAL_URL`, and the config reads it for the socket allowlist. The host printed into QR
+codes, guest bill links and booking links is the demo client's domain rather than the service's own,
+because those are pages and the address a customer reaches for them is the one in front — set
+`PUBLIC_BASE_URL` to point them somewhere else.
 
 The database is the one real decision:
 
@@ -218,20 +221,23 @@ The free tier sleeps after inactivity, so the first request after a quiet period
 `/api/health` warms it. Uploaded menu images go to `backend/uploads` on that container's disk, so
 they disappear on redeploy — object storage is the fix for a real install.
 
-**Two hosts — client on Vercel, API on Render.** This repo's live demo does exactly that:
-`https://ai-ecru-kappa-14.vercel.app` for the client, `https://ai-1-hsus.onrender.com` for the API.
-The client is told where the API lives at build time through `VITE_API_URL`, which
-`frontend/.env.production` commits for this pair (a host-level variable overrides it), and the API's
-allowlist always includes that client origin in addition to `CORS_ORIGIN` — so neither half has to be
-remembered in a dashboard. Deep links (`/app`, `/t/<token>`) need `frontend/vercel.json`, whose single
-rewrite sends every path to `index.html`; without it a refresh or a QR code opens a 404 instead of the
-app. Uploaded images are served by the API, so the client routes every `/uploads/...` path through
-`mediaUrl()` rather than trusting a root-relative `src`.
+**One domain in front of two services.** This repo's live demo is `https://smart.restaurant.aniruddhasali.in`
+serving the client, with `/api`, `/uploads` and `/socket.io` rewritten to the Render API at
+`https://ai-1-hsus.onrender.com`. Because the browser now reaches both halves from the address it is
+standing on, `frontend/.env.production` leaves `VITE_API_URL` empty — the client calls same-origin
+`/api`, exactly like the Vite dev proxy, and no CORS allowance is needed for its own traffic. The
+rewrites live in `frontend/vercel.json` and are ordered before the SPA fallback, so a deep link
+(`/app`, `/t/<token>`, `/bill/<token>`) still opens the app while `/api` keeps reaching the service.
+Vercel cannot carry a WebSocket upgrade through a rewrite, so realtime arrives at the API as Socket.IO
+long polling; the old `https://ai-ecru-kappa-14.vercel.app` origin is still allowed, so stickers
+printed before the swap keep opening.
 
-If you change the client's domain, update `VITE_API_URL` on the client side and add the new origin to
-`CORS_ORIGIN` on the API. Anywhere other than Render: serve `frontend/dist` from any static host, put
-that host in both `CORS_ORIGIN` and `PUBLIC_BASE_URL`, and set `VITE_API_URL` to the API's origin — the
-socket handshake checks the same comma-separated list as the HTTP routes.
+The API's own config carries both client addresses (`demoClients` in `backend/src/config/env.ts`), so
+the socket allowlist, the printed QR codes and the guest bill links come out right without a dashboard
+variable. To move the demo to another domain, edit that list, point the rewrites at the new pair, and
+only set `PUBLIC_BASE_URL` if the pages should open somewhere else than the first entry. Anywhere
+other than Render: serve `frontend/dist` from any static host, put that host in `CORS_ORIGIN`, and set
+`VITE_API_URL` to the API's origin if the host cannot proxy `/api` itself.
 
 ## What is deliberately mocked
 

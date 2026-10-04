@@ -4,7 +4,9 @@ Every sign-in the seeded tenant understands, in one place, so a walkthrough need
 open. These are fake people at a fake restaurant in Koregaon Park, Pune — no real money, no real
 guest data and no real kitchen stands behind the passwords below.
 
-Live: <https://ai-ecru-kappa-14.vercel.app> · API: <https://ai-1-hsus.onrender.com>
+Live: <https://smart.restaurant.aniruddhasali.in> — one address for the app and its `/api`.
+The old client host <https://ai-ecru-kappa-14.vercel.app> still opens, and the API behind both is
+<https://ai-1-hsus.onrender.com>.
 Local: <http://localhost:5173> · API: <http://localhost:4000>
 
 ## Master password
@@ -59,7 +61,7 @@ staff registry.
 
 ## Applying for a job
 
-<https://ai-ecru-kappa-14.vercel.app/apply/saffron-and-smoke> — no login. A stranger picks a floor
+<https://smart.restaurant.aniruddhasali.in/apply/saffron-and-smoke> — no login. A stranger picks a floor
 job, leaves a name and a phone number, and the manager (or the owner) approves or rejects it from
 Back office → Staff → *Applications*. An approved applicant becomes an active staff
 member with that phone number and can immediately sign in with a one-time code. Only the owner can

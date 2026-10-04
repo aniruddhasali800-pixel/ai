@@ -1,3 +1,9 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "$comment": "smart.restaurant.aniruddhasali.in serves this client and the API from one address: the first three rewrites proxy the backend's own routes to the Render service, in the exact order the Vite dev server proxies them, and the last one is the SPA fallback for deep links (/app, /t/<token>, /bill/<token>). Order matters — a catch-all first would swallow /api. Vercel cannot upgrade a WebSocket through a rewrite, so Socket.IO arrives here as long polling; the client asks for ['websocket','polling'] and settles on the transport that works.",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://ai-1-hsus.onrender.com/api/$1" },
+    { "source": "/uploads/(.*)", "destination": "https://ai-1-hsus.onrender.com/uploads/$1" },
+    { "source": "/socket.io/(.*)", "destination": "https://ai-1-hsus.onrender.com/socket.io/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

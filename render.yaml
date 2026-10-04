@@ -2,8 +2,9 @@
 # `npm run build` in backend/ bundles the server and builds ../frontend/dist, which
 # the API then serves, so the default Node build and start commands are enough.
 # Render publishes the service's own URL through RENDER_EXTERNAL_URL, and the config
-# reads it for the CORS allowlist and for the host baked into QR codes and guest
-# links — so there is nothing to type here except the database connection string.
+# reads it for the CORS allowlist. The host baked into QR codes and guest links is the
+# demo client's domain, since that is the address a customer's phone opens — so there is
+# nothing to type here except the database connection string.
 services:
   - type: web
     name: sizzle

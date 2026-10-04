@@ -14,8 +14,21 @@ const localDev = 'http://localhost:5173';
  * The demo client is deployed on its own host, so the API has to be able to read that
  * origin. A dashboard variable nobody remembers to update is the usual way a deployment
  * silently loses realtime, so these are always allowed, not only the default.
+ *
+ * The custom domain serves the site and proxies /api here, so it is same-origin and needs
+ * no entry for its own traffic; it is listed because QR codes and bill links are printed
+ * with it. The old Vercel address stays second: stickers already printed and shortcuts
+ * already saved point at it, and a deployed client must keep opening.
  */
-const demoClients = ['https://ai-ecru-kappa-14.vercel.app'];
+const demoClients = ['https://smart.restaurant.aniruddhasali.in', 'https://ai-ecru-kappa-14.vercel.app'];
+
+/**
+ * Links a person opens — the table sticker, the guest's bill, the pay page, the booking
+ * confirmation — belong on the host that serves pages, not on the API host: this service only
+ * answers /api and a Render sleep between requests turns a printed code into an error page.
+ * The proxied custom domain serves both the site and /api, so it is the address customers reach.
+ */
+const publicBase = hosted ? demoClients[0] : localDev;
 
 const builtInOrigins = [hosted, ...demoClients, localDev].filter(Boolean) as string[];
 
@@ -40,12 +53,14 @@ const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
   MONGODB_URI: z.string().trim().optional(),
+
   ACCESS_TOKEN_SECRET: z.string().min(16).default('dev-access-secret-0000000000'),
   REFRESH_TOKEN_SECRET: z.string().min(16).default('dev-refresh-secret-0000000000'),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
+
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().default(7),
   CORS_ORIGIN: z.string().default(builtInOrigins.join(',')),
-  PUBLIC_BASE_URL: z.string().default(hosted ?? localDev),
+  PUBLIC_BASE_URL: z.string().default(publicBase),
   PAYMENT_WEBHOOK_SECRET: z.string().default('dev-webhook-secret'),
   SWIGGY_WEBHOOK_SECRET: z.string().default('dev-swiggy-secret'),
   ZOMATO_WEBHOOK_SECRET: z.string().default('dev-zomato-secret'),
@@ -125,14 +140,14 @@ export const allowedOrigins = [
 if (hosted && isPrivateAddress(env.PUBLIC_BASE_URL)) {
   console.warn(
     `[config] PUBLIC_BASE_URL is ${env.PUBLIC_BASE_URL}, which no browser outside this machine can open. ` +
-      `Using ${hosted} for table QR codes, guest bills and booking links instead — clear the variable, ` +
+      `Using ${publicBase} for table QR codes, guest bills and booking links instead — clear the variable, ` +
       'or set it to the address your customers reach.',
   );
-  env.PUBLIC_BASE_URL = hosted;
+  env.PUBLIC_BASE_URL = publicBase;
 } else if (hosted && env.PUBLIC_BASE_URL !== hosted && !allowedOrigins.includes(env.PUBLIC_BASE_URL)) {
   console.warn(
     `[config] PUBLIC_BASE_URL is ${env.PUBLIC_BASE_URL} while this host serves ${hosted}. ` +
       'Table QR codes, guest bills and booking links will point at the first address — set it to ' +
-      'the host your customers can actually reach, or clear the variable to use this one.',
+      'the host your customers can actually reach, or clear the variable to use the deployed client.',
   );
 }
