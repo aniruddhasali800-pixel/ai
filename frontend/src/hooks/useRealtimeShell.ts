@@ -61,6 +61,8 @@ export function useRealtimeShell() {
     }
   };
   useRealtimeEvent('payment.succeeded', onPayment);
+  // A claim is a guest's word, not money — repaint the queue quietly, the role notification makes the noise.
+  useRealtimeEvent('payment.claimed', () => invalidateMany(['payments', 'bills', 'reports', 'dashboard']));
   useRealtimeEvent('payment.refunded', () => invalidateMany(['payments', 'bills', 'reports']));
   useRealtimeEvent('payment.failed', () => invalidate('payments'));
 

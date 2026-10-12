@@ -13,6 +13,7 @@ import {
   Sparkles,
   UtensilsCrossed,
   Users,
+  Wallet,
 } from 'lucide-react';
 import { AppShell, type NavItem } from './AppShell';
 import { useAuth } from '../store/auth';
@@ -29,6 +30,7 @@ const NAV: (NavItem & { permission: string })[] = [
   { to: '/app/inventory', label: 'Inventory', icon: <ShoppingBasket size={17} />, permission: 'inventory:read' },
   { to: '/app/staff', label: 'Staff', icon: <Users size={17} />, permission: 'staff:read' },
   { to: '/app/reports', label: 'Reports', icon: <BarChart3 size={17} />, permission: 'reports:read' },
+  { to: '/app/payments', label: 'Payments', icon: <Wallet size={17} />, permission: 'payments:read' },
   { to: '/app/delivery', label: 'Delivery', icon: <Link2 size={17} />, permission: 'integrations:write' },
   { to: '/app/audit', label: 'Audit log', icon: <ScrollText size={17} />, permission: 'audit:read' },
   { to: '/app/settings', label: 'Settings', icon: <Settings size={17} />, permission: 'settings:read' },

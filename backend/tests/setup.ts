@@ -8,3 +8,11 @@ process.env.SWIGGY_WEBHOOK_SECRET = 'test-swiggy-webhook-secret';
 process.env.ZOMATO_WEBHOOK_SECRET = 'test-zomato-webhook-secret';
 process.env.WEBSITE_WEBHOOK_SECRET = 'test-website-webhook-secret';
 process.env.RAZORPAY_WEBHOOK_SECRET = 'test-razorpay-webhook-secret';
+// The bill service pairing. The base URL is blanked for the whole suite — a developer's real
+// .env points at a live service, and tests must not reach it: the default posture is "nothing
+// paired", which is what a fresh checkout runs as. The bill-service test sets it per case.
+// Blank, not deleted: env.ts loads dotenv after this file runs, and dotenv fills in any key
+// that is missing — a deleted value would come straight back out of the developer's .env.
+process.env.BILL_SERVICE_BASE_URL = '';
+process.env.BILL_SERVICE_SHARED_SECRET = 'test-bill-service-secret';
+process.env.BILL_SERVICE_KEY = 'sizzle-pay';

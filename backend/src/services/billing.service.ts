@@ -1,4 +1,4 @@
-import { Types } from 'mongoose';
+import { Types, type HydratedDocument } from 'mongoose';
 import { BillModel, CustomerRequestModel, OrderModel, PaymentModel, RestaurantModel, TableModel, TableSessionModel, nextSeq } from '../models';
 import { round2, roundToRupee } from '../utils/money';
 import { emit, Events } from '../realtime/emit';
@@ -9,6 +9,8 @@ import { closeSession } from './table.service';
 import { notifyRoles } from './notification.service';
 import { recordAudit } from './audit.service';
 import { gatewayFor, onlineGateway } from '../integrations/payments';
+import { billServiceEnabled, closeBillIntent, createBillIntent, readBillIntent, type BillIntent } from '../integrations/billService';
+import type { Payment } from '../models/Payment';
 import { upiChargeFor } from './upi.service';
 import type { PaymentMethod, Role } from '../types/constants';
 
@@ -22,6 +24,182 @@ async function billOr404(restaurantId: string, billId: string) {
   const bill = await BillModel.findOne({ _id: billId, restaurantId });
   if (!bill) throw ApiError.notFound('Bill not found');
   return bill;
+}
+
+/** The bill fields a payment request needs — a plain object or a document both qualify. */
+interface PayableBill {
+  _id: unknown;
+  restaurantId: unknown;
+  billNumber: string;
+  grandTotal: number;
+  tableNumber: string;
+  customerName: string;
+  orderIds: unknown[];
+}
+
+/**
+ * What the counter and the guest's bill page render. Both the bill service and this tenant's own
+ * UPI handle fill the same shape, so a screen never has to know which one is paired.
+ */
+export interface BillPayView {
+  link: string;
+  qrDataUrl: string;
+  upiId: string;
+  payeeName: string;
+  amount: number;
+  note: string;
+  /** Set only when the bill service is collecting: the guest's own page, and the request's state. */
+  payUrl?: string;
+  intentId?: string;
+  paymentStatus?: string;
+  utr?: string | null;
+}
+
+function servicePayView(intent: BillIntent): BillPayView {
+  return {
+    link: intent.upiUri,
+    qrDataUrl: intent.qrDataUrl,
+    upiId: intent.payeeVpa,
+    payeeName: intent.payeeName,
+    amount: intent.amountRupees,
+    note: intent.note,
+    payUrl: intent.payUrl,
+    intentId: intent.id,
+    paymentStatus: intent.paymentStatus,
+    utr: intent.utr,
+  };
+}
+
+const OPEN_UPI_PAYMENT = { provider: 'UPI_DIRECT', status: { $in: ['PENDING', 'VERIFICATION_PENDING'] } };
+
+/** Keeps the local ledger row in step with the request the bill service actually holds. */
+async function mirrorUpiPayment(bill: PayableBill, intent: BillIntent): Promise<HydratedDocument<Payment>> {
+  const status = intent.paymentStatus === 'PAYMENT_VERIFICATION_PENDING' ? 'VERIFICATION_PENDING' : 'PENDING';
+  const existing = await PaymentModel.findOne({ billId: bill._id, provider: 'UPI_DIRECT', providerOrderId: intent.id });
+  if (existing) {
+    if (existing.amount !== intent.amountRupees || existing.status !== status) {
+      existing.amount = intent.amountRupees;
+      existing.status = status;
+      existing.checkoutUrl = intent.payUrl;
+      await existing.save();
+    }
+    return existing;
+  }
+  return PaymentModel.create({
+    restaurantId: bill.restaurantId,
+    billId: bill._id,
+    orderIds: bill.orderIds,
+    method: 'UPI',
+    provider: 'UPI_DIRECT',
+    providerOrderId: intent.id,
+    amount: intent.amountRupees,
+    checkoutUrl: intent.payUrl,
+    status,
+    meta: { token: intent.token, payeeMasked: intent.payeeVpaMasked },
+  });
+}
+
+/**
+ * Raises the UPI request for a bill and records the payment it stands for. Called the moment the
+ * bill is finalised, so nobody has to start a payment for a table. Safe to repeat: the service
+ * keys its request on the bill id and hands the same token back, so an already-printed QR keeps
+ * working even after the bill total moved.
+ */
+async function raiseUpiRequest(bill: PayableBill): Promise<{ payment: HydratedDocument<Payment> | null; view: BillPayView } | null> {
+  try {
+    const { intent } = await createBillIntent({
+      externalBillId: String(bill._id),
+      externalBillNumber: bill.billNumber,
+      externalRestaurantId: String(bill.restaurantId),
+      externalTableNumber: bill.tableNumber || null,
+      customerLabel: bill.customerName || (bill.tableNumber ? `Table ${bill.tableNumber}` : bill.billNumber),
+      amountRupees: bill.grandTotal,
+    });
+    // A finished request over there is not an open payment over here. Money is only ever marked
+    // received by the signed webhook; this read reports, it does not settle.
+    if (intent.paymentStatus !== 'PENDING' && intent.paymentStatus !== 'PAYMENT_VERIFICATION_PENDING') {
+      console.warn(`[bill-service] ${bill.billNumber} already has a ${intent.paymentStatus} request — left alone`);
+      return { payment: null, view: servicePayView(intent) };
+    }
+    return { payment: await mirrorUpiPayment(bill, intent), view: servicePayView(intent) };
+  } catch (error) {
+    console.error('[bill-service] could not raise the UPI request', error);
+    return null;
+  }
+}
+
+/**
+ * The live pay view for an unpaid bill: the paired service first, this tenant's own handle
+ * otherwise. `raise` opens a request that is missing — a staff screen may do that; the public
+ * guest page only reads what is already held, so a visitor cannot create ledger rows.
+ */
+async function payViewFor(bill: PayableBill, opts: { raise: boolean }): Promise<BillPayView | null> {
+  if (billServiceEnabled()) {
+    const open = await PaymentModel.findOne({ billId: bill._id, ...OPEN_UPI_PAYMENT }).lean();
+    // The service resolves a bill id too, so the guest sees the QR even if the ledger row is missing.
+    try {
+      const read = await readBillIntent(open?.providerOrderId ?? String(bill._id));
+      if (read.intent.paymentStatus === 'PENDING' || read.intent.paymentStatus === 'PAYMENT_VERIFICATION_PENDING') {
+        await mirrorUpiPayment(bill, read.intent);
+      }
+      return servicePayView(read.intent);
+    } catch (error) {
+      console.error('[bill-service] intent read failed', error);
+      if (opts.raise) {
+        const raised = await raiseUpiRequest(bill);
+        if (raised) return raised.view;
+      }
+      if (open) {
+        // The service is not answering: show what the ledger already knows so the screen still works.
+        return {
+          link: '',
+          qrDataUrl: '',
+          upiId: '',
+          payeeName: '',
+          amount: open.amount,
+          note: bill.billNumber,
+          intentId: open.providerOrderId ?? undefined,
+          utr: open.transactionId ?? null,
+        };
+      }
+    }
+  }
+  return upiChargeFor(String(bill.restaurantId), bill.grandTotal, bill.billNumber);
+}
+
+/**
+ * The money came in another way — cash at the counter, or a void — so the table's QR has to stop
+ * asking for it. The local rows close first: even if the service cannot be reached from here, the
+ * ledger never keeps a phantom open payment beside a paid bill.
+ */
+async function closeUpiRequest(billId: unknown, actor: Actor, reason: string): Promise<void> {
+  const open = await PaymentModel.find({ billId, ...OPEN_UPI_PAYMENT });
+  if (!open.length) return;
+  for (const payment of open) {
+    payment.status = 'FAILED';
+    payment.failureReason = reason;
+    await payment.save();
+  }
+  if (!billServiceEnabled()) return;
+  try {
+    await closeBillIntent(String(billId), { role: actor.role, name: actor.name }, reason);
+  } catch (error) {
+    console.error('[bill-service] the QR could not be closed from here — close it in the payment dashboard', error);
+  }
+}
+
+/**
+ * Opens (or re-reads) the UPI request for one bill — the counter's retry button, and the same call
+ * a finalised bill makes for itself.
+ */
+export async function raiseBillIntent(restaurantId: string, billId: string): Promise<BillPayView> {
+  const bill = await billOr404(restaurantId, billId);
+  if (bill.status !== 'ISSUED' || bill.paymentStatus !== 'UNPAID') {
+    throw ApiError.conflict('This bill is already settled');
+  }
+  const raised = await raiseUpiRequest(bill);
+  if (!raised) throw new ApiError(502, 'The payment service did not answer — try again in a moment');
+  return raised.view;
 }
 
 export async function createBill(opts: {
@@ -163,6 +341,10 @@ export async function createBill(opts: {
     metadata: { billNumber, grandTotal: total, orders: orders.length },
   });
 
+  // The bill is final, so the money request opens with it: the guest scans a QR from the table
+  // without anyone starting a payment, and a claim lands in the verification queue by itself.
+  if (total > 0 && billServiceEnabled()) await raiseUpiRequest(bill);
+
   return bill.toObject();
 }
 
@@ -180,9 +362,7 @@ export async function getBill(restaurantId: string, billId: string) {
   const [orders, payments, upi] = await Promise.all([
     OrderModel.find({ _id: { $in: bill.orderIds }, restaurantId }).lean(),
     PaymentModel.find({ billId: bill._id, restaurantId }).sort({ createdAt: -1 }).lean(),
-    bill.paymentStatus === 'UNPAID'
-      ? upiChargeFor(restaurantId, bill.grandTotal, bill.billNumber)
-      : Promise.resolve(null),
+    bill.paymentStatus === 'UNPAID' ? payViewFor(bill, { raise: true }) : Promise.resolve(null),
   ]);
   return { bill: bill.toObject(), orders, payments, upi };
 }
@@ -248,6 +428,7 @@ export async function recordCashPayment(opts: {
   });
 
   await settleBill(bill._id.toString(), opts.restaurantId, payment._id.toString(), opts.actor);
+  await closeUpiRequest(bill._id, opts.actor, 'Settled by cash at the counter');
 
   await recordAudit({
     restaurantId: opts.restaurantId,
@@ -273,6 +454,17 @@ export async function startOnlinePayment(opts: {
   if (bill.status !== 'ISSUED' || bill.paymentStatus !== 'UNPAID') {
     throw ApiError.conflict('This bill is already settled');
   }
+
+  // With the bill service paired, a UPI request is its own raise path — the same one a finalised
+  // bill uses, so this button can only ever re-open or report the table's existing QR.
+  if (billServiceEnabled() && opts.method === 'UPI') {
+    const raised = await raiseUpiRequest(bill);
+    if (!raised) throw new ApiError(502, 'The payment service did not answer — take cash, or try again in a moment');
+    if (!raised.payment) throw ApiError.conflict(`That request is already ${raised.view.paymentStatus} in the payment service`);
+    emit.toCashier(opts.restaurantId, Events.BILL_UPDATED, { billId: String(bill._id), paymentPending: true });
+    return raised.payment.toObject();
+  }
+
   const gateway = opts.provider ? gatewayFor(opts.provider) ?? onlineGateway() : onlineGateway();
   const intent = await gateway.createIntent({
     amount: bill.grandTotal,
@@ -280,6 +472,9 @@ export async function startOnlinePayment(opts: {
     reference: bill.billNumber,
     method: opts.method,
     notes: `Bill ${bill.billNumber}${bill.tableNumber ? ` · Table ${bill.tableNumber}` : ''}`,
+    externalId: String(bill._id),
+    customerLabel: bill.customerName || (bill.tableNumber ? `Table ${bill.tableNumber}` : bill.billNumber),
+    tableNumber: bill.tableNumber || undefined,
   });
 
   const payment = await PaymentModel.create({
@@ -304,6 +499,8 @@ export async function markPaymentSucceeded(opts: {
   providerOrderId?: string;
   paymentId?: string;
   providerPaymentId?: string;
+  /** The UTR a person read off their own statement before they said the money arrived. */
+  utr?: string;
 }): Promise<{ ok: boolean; message?: string }> {
   const query = opts.paymentId ? { _id: opts.paymentId } : { providerOrderId: opts.providerOrderId };
   const payment = await PaymentModel.findOne(query);
@@ -313,6 +510,7 @@ export async function markPaymentSucceeded(opts: {
   payment.status = 'SUCCEEDED';
   payment.verifiedAt = new Date();
   if (opts.providerPaymentId) payment.providerPaymentId = opts.providerPaymentId;
+  if (opts.utr) payment.transactionId = opts.utr;
   await payment.save();
 
   await settleBill(payment.billId.toString(), payment.restaurantId.toString(), payment._id.toString(), {
@@ -340,6 +538,70 @@ export async function markPaymentFailed(opts: { providerOrderId?: string; paymen
     reason: payment.failureReason,
   });
   return { ok: true };
+}
+
+/**
+ * A guest says they paid. That is a claim, not money: the bill stays unpaid, the table stays
+ * open, the kitchen hears nothing and the income figures do not move. What happens is that the
+ * counter is told to look at a statement — and only a signed `payment.captured` afterwards can
+ * settle anything.
+ */
+export async function markPaymentVerificationPending(opts: {
+  providerOrderId?: string;
+  paymentId?: string;
+}): Promise<{ ok: boolean; message?: string }> {
+  const query = opts.paymentId ? { _id: opts.paymentId } : { providerOrderId: opts.providerOrderId };
+  const payment = await PaymentModel.findOne(query);
+  if (!payment) return { ok: false, message: 'Payment reference not found' };
+  if (payment.status === 'SUCCEEDED') return { ok: true, message: 'Already settled' };
+
+  if (payment.status !== 'VERIFICATION_PENDING') {
+    payment.status = 'VERIFICATION_PENDING';
+    await payment.save();
+  }
+
+  const bill = await BillModel.findById(payment.billId)
+    .select('billNumber grandTotal tableNumber restaurantId tableSessionId')
+    .lean();
+  const restaurantId = String(payment.restaurantId);
+  const payload = {
+    paymentId: String(payment._id),
+    billId: String(payment.billId),
+    billNumber: bill?.billNumber ?? '',
+    amount: payment.amount,
+    method: payment.method,
+    provider: payment.provider,
+  };
+  emit.toCashier(restaurantId, Events.PAYMENT_CLAIMED, payload);
+  emit.toRestaurant(restaurantId, Events.PAYMENT_CLAIMED, payload);
+  // The guest's own screen is the one place that must not go quiet after they tap "I've paid".
+  if (bill?.tableSessionId) {
+    const session = await TableSessionModel.findById(bill.tableSessionId).select('publicToken').lean();
+    if (session) {
+      emit.toSession(session.publicToken, Events.PAYMENT_CLAIMED, {
+        billNumber: payload.billNumber,
+        amount: payload.amount,
+        state: 'CHECKING',
+      });
+    }
+  }
+  await notifyRoles(restaurantId, ['CASHIER', 'OWNER', 'MANAGER'], {
+    type: 'PAYMENT_CLAIMED',
+    title: `${bill?.billNumber ?? 'A bill'} claims a UPI payment`,
+    body: `₹${payment.amount.toFixed(2)}${bill?.tableNumber ? ` · Table ${bill.tableNumber}` : ''} — check the statement before marking it paid`,
+    entityType: 'Payment',
+    entityId: String(payment._id),
+  });
+  await recordAudit({
+    restaurantId,
+    actorId: null,
+    actorName: 'Payment service',
+    action: 'payment.claimed',
+    entityType: 'Payment',
+    entityId: String(payment._id),
+    metadata: { billNumber: bill?.billNumber ?? '', amount: payment.amount },
+  });
+  return { ok: true, message: 'Claim recorded' };
 }
 
 async function settleBill(billId: string, restaurantId: string, paymentId: string, actor: Actor) {
@@ -527,7 +789,7 @@ export async function publicBillView(publicToken: string) {
     items,
     pay:
       bill.paymentStatus === 'UNPAID'
-        ? await upiChargeFor(String(bill.restaurantId), bill.grandTotal, bill.billNumber)
+        ? await payViewFor(bill, { raise: false })
         : null,
   };
 }

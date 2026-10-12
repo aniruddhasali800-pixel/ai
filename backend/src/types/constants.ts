@@ -70,7 +70,15 @@ export type BookingStatus = (typeof BOOKING_STATUSES)[number];
 export const PAYMENT_METHODS = ['CASH', 'CARD', 'UPI', 'ONLINE'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export const PAYMENT_STATUSES = ['PENDING', 'SUCCEEDED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED'] as const;
+/** 'VERIFICATION_PENDING' is a guest's claim, not money: the statement has not been read yet. */
+export const PAYMENT_STATUSES = [
+  'PENDING',
+  'VERIFICATION_PENDING',
+  'SUCCEEDED',
+  'FAILED',
+  'REFUNDED',
+  'PARTIALLY_REFUNDED',
+] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 export const BILL_STATUSES = ['ISSUED', 'PAID', 'VOID', 'REFUNDED'] as const;
@@ -93,6 +101,7 @@ export const NOTIFICATION_TYPES = [
   'ORDER_READY',
   'BILL_REQUESTED',
   'CUSTOMER_REQUEST',
+  'PAYMENT_CLAIMED',
   'PAYMENT_SUCCEEDED',
   'PAYMENT_FAILED',
   'BOOKING_CREATED',

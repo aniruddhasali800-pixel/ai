@@ -103,6 +103,8 @@ export const BILL_STATUS_META: Record<BillStatus, { label: string; cls: string }
 
 export const PAYMENT_STATUS_META: Record<PaymentStatus, { label: string; cls: string }> = {
   PENDING: { label: 'Pending', cls: 'bg-amber-50 text-amber-800 ring-amber-200' },
+  // The guest says they paid. Nobody has seen the money yet, so the word is "claimed", not "paid".
+  VERIFICATION_PENDING: { label: 'To verify', cls: 'bg-blue-50 text-blue-800 ring-blue-200' },
   SUCCEEDED: { label: 'Succeeded', cls: 'bg-leaf-100 text-leaf-600 ring-leaf-500/30' },
   FAILED: { label: 'Failed', cls: 'bg-red-50 text-red-700 ring-red-200' },
   REFUNDED: { label: 'Refunded', cls: 'bg-stone-100 text-stone-600 ring-stone-300' },

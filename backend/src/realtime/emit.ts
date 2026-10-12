@@ -16,6 +16,7 @@ export const Events = {
   BILL_CREATED: 'bill.created',
   BILL_UPDATED: 'bill.updated',
   BILL_PAID: 'bill.paid',
+  PAYMENT_CLAIMED: 'payment.claimed',
   PAYMENT_SUCCEEDED: 'payment.succeeded',
   PAYMENT_FAILED: 'payment.failed',
   PAYMENT_REFUNDED: 'payment.refunded',

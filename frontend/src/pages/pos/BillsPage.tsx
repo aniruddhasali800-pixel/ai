@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Banknote, CreditCard, Inbox, Printer, RotateCcw, Search, Smartphone } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Banknote, CreditCard, Hourglass, Inbox, Printer, RotateCcw, Search, Smartphone } from 'lucide-react';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg } from '../../lib/api';
 import type { Bill, Order, Paginated, Payment, UpiCharge } from '../../lib/types';
@@ -145,6 +145,8 @@ function BillDrawer({ billId, onClose, canSettle }: { billId: string | null; onC
 
   if (!billId) return null;
   const b = detail?.bill;
+  // A guest's "I've paid" lands here as a claim. It must be visible before any other button.
+  const claimed = detail?.payments.find((p) => p.status === 'VERIFICATION_PENDING');
   const deliverTo = detail?.orders.find((o) => o.customerAddress || o.customerCity);
   const deliveryNote = deliverTo ? [deliverTo.customerAddress, deliverTo.customerCity].filter(Boolean).join(', ') : '';
   const deliveryPhone = deliverTo?.customerPhone ?? '';
@@ -210,6 +212,21 @@ function BillDrawer({ billId, onClose, canSettle }: { billId: string | null; onC
             )}
 
             {detail!.upi && b.paymentStatus === 'UNPAID' && <UpiQr charge={detail!.upi} />}
+
+            {claimed && (
+              <div className="flex flex-wrap items-center gap-2.5 rounded-xl bg-blue-50 px-3.5 py-3 text-[12.5px] leading-snug text-blue-900 ring-1 ring-blue-200">
+                <Hourglass size={16} className="shrink-0" />
+                <p className="min-w-0 flex-1">
+                  The guest says {inr(claimed.amount)} has been sent to this UPI account. It is a claim,
+                  not money — open the statement, then confirm it with the UTR or reject it.
+                </p>
+                {canSettle && (
+                  <Link to="/app/payments" className="shrink-0 rounded-lg bg-blue-600 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-blue-700">
+                    Verify it
+                  </Link>
+                )}
+              </div>
+            )}
 
             {!!b.publicToken && (
               <button
@@ -357,6 +374,24 @@ function OnlineModal({ bill, charge, onClose, onDone }: { bill: Bill; charge: Up
             </Select>
           </Field>
           {method === 'UPI' && charge && <UpiQr charge={charge} />}
+        </div>
+      ) : payment.provider === 'UPI_DIRECT' ? (
+        <div className="space-y-3">
+          {charge && <UpiQr charge={charge} />}
+          <div className="rounded-xl bg-ink-50 px-3.5 py-3 text-[13px]">
+            <p className="font-semibold text-ink-900">{payment.method} · direct to the restaurant’s UPI account</p>
+            <p className="mt-0.5 text-ink-500">{charge?.upiId ?? payment.providerOrderId}</p>
+            {payment.checkoutUrl && (
+              <a href={payment.checkoutUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block break-all text-[12px] font-semibold text-ember-600 hover:underline">
+                The guest’s payment page
+              </a>
+            )}
+          </div>
+          {/* Direct UPI has no gateway to ask: only a person with the statement can settle it. */}
+          <p className="rounded-xl bg-amber-50 px-3.5 py-2.5 text-[12px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
+            Nothing on this screen can mark the money as arrived. When the transfer shows in the account, confirm it with
+            the UTR under Payments; if the guest taps “I’ve paid” first, the claim appears there too.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">

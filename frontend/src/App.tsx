@@ -22,6 +22,7 @@ const BookingsPage = lazy(() => import('./pages/owner/BookingsPage').then((m) =>
 const InventoryPage = lazy(() => import('./pages/owner/InventoryPage').then((m) => ({ default: m.InventoryPage })));
 const StaffPage = lazy(() => import('./pages/owner/StaffPage').then((m) => ({ default: m.StaffPage })));
 const ReportsPage = lazy(() => import('./pages/owner/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const PaymentsPage = lazy(() => import('./pages/owner/PaymentsPage').then((m) => ({ default: m.PaymentsPage })));
 const DeliveryPage = lazy(() => import('./pages/owner/DeliveryPage').then((m) => ({ default: m.DeliveryPage })));
 const AuditPage = lazy(() => import('./pages/owner/AuditPage').then((m) => ({ default: m.AuditPage })));
 const SettingsPage = lazy(() => import('./pages/owner/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -68,6 +69,7 @@ export function App() {
           <Route path="inventory" element={<InventoryPage />} />
           <Route path="staff" element={<StaffPage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="payments" element={<PaymentsPage />} />
           <Route path="delivery" element={<DeliveryPage />} />
           <Route path="audit" element={<AuditPage />} />
           <Route path="settings" element={<SettingsPage />} />

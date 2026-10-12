@@ -10,10 +10,13 @@ import { refundPayment } from '../../services/billing.service';
 import { captureMockPayment } from '../../services/mockCapture';
 import { PAYMENT_METHODS, PAYMENT_STATUSES } from '../../types/constants';
 import { queryOf } from '../../utils/query';
+import { billServiceRouter } from './billService.routes';
 
 export const paymentsRouter = Router();
 
 paymentsRouter.use(requireAuth);
+// Registered before the /:id routes so the payment dashboard keeps its own paths.
+paymentsRouter.use('/service', billServiceRouter);
 
 const listQuerySchema = z.object({
   billId: z.string().optional(),

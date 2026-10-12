@@ -24,7 +24,7 @@ export type TableStatus =
 export type SessionStatus = 'OPEN' | 'BILL_REQUESTED' | 'PAYMENT_PENDING' | 'CLOSED';
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'ARRIVED' | 'SEATED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 export type PaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'ONLINE';
-export type PaymentStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
+export type PaymentStatus = 'PENDING' | 'VERIFICATION_PENDING' | 'SUCCEEDED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
 export type BillStatus = 'ISSUED' | 'PAID' | 'VOID' | 'REFUNDED';
 export type RequestType = 'CALL_WAITER' | 'WATER' | 'PLATE' | 'CUTLERY' | 'NAPKIN' | 'BILL' | 'CASH_PAYMENT' | 'TABLE_CLEAR' | 'OTHER';
 export type Station = 'MAIN' | 'GRILL' | 'FRY' | 'TANDOOR' | 'BAR' | 'DESSERT';
@@ -36,6 +36,7 @@ export type NotificationType =
   | 'BILL_REQUESTED'
   | 'CUSTOMER_REQUEST'
   | 'PAYMENT_SUCCEEDED'
+  | 'PAYMENT_CLAIMED'
   | 'PAYMENT_FAILED'
   | 'BOOKING_CREATED'
   | 'BOOKING_REMINDER'
@@ -665,6 +666,66 @@ export interface UpiCharge {
   payeeName: string;
   amount: number;
   note: string;
+  /** Present when the bill service owns this payment: its own page, and the truth about the money. */
+  payUrl?: string;
+  intentId?: string;
+  paymentStatus?: string;
+  utr?: string | null;
+}
+
+/** One payment request as the bill service holds it. */
+export interface ServiceIntent {
+  id: string;
+  code: string;
+  token: string;
+  payUrl: string;
+  status: string;
+  paymentStatus: string;
+  amountPaise: number;
+  amountRupees: number;
+  upiUri: string;
+  qrDataUrl: string;
+  payeeVpaMasked: string;
+  payeeName: string;
+  note: string;
+  customerLabel: string;
+  source?: string;
+  externalBillId: string | null;
+  externalBillNumber?: string | null;
+  tableNumber: string | null;
+  utr: string | null;
+  paidAt: string | null;
+  verifiedByName: string | null;
+  updatedAt?: string;
+}
+
+export interface ServiceOverview {
+  enabled: boolean;
+  reason?: string;
+  days?: number;
+  queue?: { awaitingVerification: ServiceIntent[]; open: ServiceIntent[] };
+  income?: ServiceIncome;
+  payee?: ServicePayee;
+}
+
+export interface ServiceIncome {
+  collectedPaise: number;
+  count: number;
+  awaitingVerification: { amountPaise: number; count: number };
+  openRequests: { amountPaise: number; count: number };
+  failedOrCancelled: { amountPaise: number; count: number };
+  days: { day: string; amountPaise: number; count: number }[];
+  bySource: { source: string; amountPaise: number; count: number }[];
+  byVerifier: { name: string; amountPaise: number; count: number }[];
+}
+
+export interface ServicePayee {
+  businessName: string;
+  payeeName: string;
+  payeeMasked: string;
+  currency: string;
+  notesPrefix: string;
+  enabled: boolean;
 }
 
 /** What the API decided a scanned code means *for this role* — never chosen in the browser. */

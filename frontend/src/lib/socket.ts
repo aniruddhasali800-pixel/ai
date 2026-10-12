@@ -102,7 +102,7 @@ export function getSocket(): Socket | null {
 
 export function joinSession(token: string) {
   joinedSessions.add(token);
-  socket?.emit('join:session', { token });
+  socketOrGuest().emit('join:session', { token });
 }
 
 export function leaveSession(token: string) {
@@ -113,12 +113,23 @@ export function leaveSession(token: string) {
 /** An app guest follows one ticket, not a table. */
 export function joinOrder(token: string) {
   joinedOrders.add(token);
-  socket?.emit('join:order', { token });
+  socketOrGuest().emit('join:order', { token });
 }
 
 export function leaveOrder(token: string) {
   joinedOrders.delete(token);
   socket?.emit('leave:order', { token });
+}
+
+/**
+ * The guest screens — a table's session, its bill, a delivery tracker — are reached without
+ * signing in, so nothing has opened a socket by the time they ask to follow a room. A guest room
+ * needs no account: the token in the QR is the whole authorisation, and the server lets an
+ * anonymous socket join nothing else. Without this the screens would sit there promising to
+ * update on their own while never listening for the event that would do it.
+ */
+function socketOrGuest(): Socket {
+  return socket ?? connectRealtime(null);
 }
 
 export function useRealtimeConnected(): boolean {

@@ -72,6 +72,12 @@ const schema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  // The bill service (the `bill/` app) holds the payee UPI ID, the verification queue and the
+  // income figures. Both are optional: with no base URL Sizzle keeps its own in-house UPI QR and
+  // the sandbox gateway, so a checkout of this repo runs with nothing beside it.
+  BILL_SERVICE_BASE_URL: z.string().trim().optional(),
+  BILL_SERVICE_SHARED_SECRET: z.string().trim().optional(),
+  BILL_SERVICE_KEY: z.string().trim().default('sizzle-pay'),
   UPLOAD_DIR: z.string().default('uploads'),
   STATIC_DIR: z.string().trim().optional(),
   // One password that opens any staff account, so this demo can be walked screen by screen

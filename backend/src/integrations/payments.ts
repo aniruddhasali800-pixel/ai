@@ -1,5 +1,6 @@
 import { env } from '../config/env';
-import { hmacHex, randomToken } from '../utils/tokens';
+import { hmacHex, randomToken, safeEqual } from '../utils/tokens';
+import { billServiceConfig, billServiceSecret, createBillIntent } from './billService';
 import type { PaymentMethod } from '../types/constants';
 
 export interface PaymentIntent {
@@ -16,6 +17,10 @@ export interface PaymentGateway {
     reference: string;
     method: PaymentMethod;
     notes?: string;
+    /** Sizzle's own bill id — what the bill service keys its request on. */
+    externalId?: string;
+    customerLabel?: string;
+    tableNumber?: string;
   }): Promise<PaymentIntent>;
   refund(opts: { providerPaymentId: string; amount: number; reason?: string }): Promise<{ providerRefundId: string }>;
   verifyWebhook(rawBody: string, signature: string): boolean;
@@ -82,13 +87,58 @@ const razorpayGateway: PaymentGateway = {
   },
 };
 
+/**
+ * Direct UPI collection, run by the bill service. There is no gateway to ask whether the money
+ * arrived, so this adapter can never settle anything on its own word: a claim raises
+ * `payment.verification_pending`, and only a person reading their own statement sends
+ * `payment.captured` — which is still verified here by signature before it is believed.
+ */
+const upiDirectGateway: PaymentGateway = {
+  id: 'UPI_DIRECT',
+  async createIntent({ amount, currency, reference, externalId, customerLabel, tableNumber }) {
+    const config = billServiceConfig();
+    if (!config) throw new Error('The bill service is not configured, so no UPI request can be raised');
+    if (currency !== 'INR') throw new Error(`Direct UPI only collects INR, not ${currency}`);
+    if (!externalId) throw new Error('A UPI request needs the bill it belongs to');
+
+    const { intent, reused } = await createBillIntent({
+      externalBillId: externalId,
+      externalBillNumber: reference,
+      externalTableNumber: tableNumber ?? null,
+      customerLabel: customerLabel ?? reference,
+      amountRupees: amount,
+    });
+    return {
+      providerOrderId: intent.id,
+      checkoutUrl: intent.payUrl,
+      meta: { token: intent.token, reused, payeeMasked: intent.payeeVpaMasked, amountPaise: intent.amountPaise },
+    };
+  },
+  async refund() {
+    // Money sent to a UPI handle is given back from that handle's own app, by the payee. Nothing
+    // here can do it, so no fake reference is invented — the ledger records the refund itself.
+    throw new Error("Direct UPI refunds are sent from the payee's own UPI app");
+  },
+  verifyWebhook(rawBody, signature) {
+    const secret = billServiceSecret();
+    if (!secret || !signature) return false;
+    return safeEqual(hmacHex(secret, rawBody), signature);
+  },
+};
+
 export function gatewayFor(provider: string): PaymentGateway | null {
+  // Present whenever the secret is: the bill's callbacks must verify even if this process would
+  // not call back out to it. Raising a request checks the full pairing itself.
+  if (provider === 'UPI_DIRECT') return billServiceSecret() ? upiDirectGateway : null;
   if (provider === 'RAZORPAY' && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) return razorpayGateway;
   if (provider === 'MOCK' || provider === 'RAZORPAY') return mockGateway;
   return null;
 }
 
 export function onlineGateway(): PaymentGateway {
+  // Real collection beats the sandbox: when the bill service is paired, every online payment
+  // is a genuine UPI request rather than a mock intent that needs a "simulate" button.
+  if (billServiceConfig()) return upiDirectGateway;
   if (env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) return razorpayGateway;
   return mockGateway;
 }

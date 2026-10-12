@@ -188,13 +188,17 @@ export interface PaymentReport {
   byMethod: { method: string; amount: number; count: number }[];
   byProvider: { provider: string; amount: number; count: number }[];
   cashierPerformance: { userId: string; name: string; collected: number; count: number }[];
+  /** Someone says they paid; nobody has read the statement yet. Claimed, never counted as income. */
+  awaitingVerification: { amount: number; count: number };
 }
 
 export async function paymentReport(restaurantId: string, from: Date, to: Date): Promise<PaymentReport> {
   const rid = new Types.ObjectId(restaurantId);
-  const base = { restaurantId: rid, status: 'SUCCEEDED' as const, createdAt: { $gte: from, $lte: to } };
+  // Income is keyed on when the money was confirmed, not when the row was opened: a claim raised
+  // on the 3rd and settled on the 4th belongs to the 4th.
+  const base = { restaurantId: rid, status: 'SUCCEEDED' as const, verifiedAt: { $gte: from, $lte: to } };
 
-  const [byMethod, byProvider, byCashier, refunds] = await Promise.all([
+  const [byMethod, byProvider, byCashier, refunds, awaiting] = await Promise.all([
     PaymentModel.aggregate<{ _id: string; amount: number; count: number }>([
       { $match: base },
       { $group: { _id: '$method', amount: { $sum: '$amount' }, count: { $sum: 1 } } },
@@ -222,6 +226,10 @@ export async function paymentReport(restaurantId: string, from: Date, to: Date):
       { $unwind: '$refunds' },
       { $group: { _id: null, refunded: { $sum: '$refunds.amount' } } },
     ]),
+    PaymentModel.aggregate<{ _id: null; amount: number; count: number }>([
+      { $match: { restaurantId: rid, status: 'VERIFICATION_PENDING' as const, createdAt: { $gte: from, $lte: to } } },
+      { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
   ]);
 
   const collected = byMethod.reduce((sum, m) => sum + m.amount, 0);
@@ -243,6 +251,7 @@ export async function paymentReport(restaurantId: string, from: Date, to: Date):
       collected: round2(c.collected),
       count: c.count,
     })),
+    awaitingVerification: { amount: round2(awaiting[0]?.amount ?? 0), count: awaiting[0]?.count ?? 0 },
   };
 }
 

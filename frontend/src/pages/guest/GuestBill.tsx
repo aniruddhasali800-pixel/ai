@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Banknote, CheckCircle2, Printer, Receipt } from 'lucide-react';
+import { AlertCircle, Banknote, CheckCircle2, Hourglass, Printer, Receipt } from 'lucide-react';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg, mediaUrl } from '../../lib/api';
 import { joinSession, leaveSession, useRealtimePrefix } from '../../lib/socket';
-import type { PublicBill } from '../../lib/types';
+import type { PublicBill, UpiCharge } from '../../lib/types';
 import { clockTime, dateTime, inr } from '../../lib/format';
 import { MerchantMark, Spinner, VegDot } from '../../components/ui';
 import { UpiQr } from '../../components/UpiQr';
@@ -103,6 +103,7 @@ export function GuestBill() {
           ) : b.pay ? (
             <div className="space-y-2.5">
               <UpiQr charge={b.pay} />
+              <PaymentState pay={b.pay} />
               {b.sessionToken ? (
                 <CashButton sessionToken={b.sessionToken} total={b.grandTotal} />
               ) : (
@@ -137,6 +138,55 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="text-ink-500">{label}</span>
       <span className="font-medium tabular-nums text-ink-800">{value}</span>
     </div>
+  );
+}
+
+/**
+ * Where the payment actually stands, in the guest's own words. A claim is never called paid here —
+ * the money is only "paid" once someone has read it out of the restaurant's account, and this page
+ * says so plainly instead of guessing from a UPI app's success screen.
+ */
+function PaymentState({ pay }: { pay: UpiCharge }) {
+  const status = pay.paymentStatus;
+
+  if (status === 'PAYMENT_VERIFICATION_PENDING') {
+    return (
+      <div className="flex items-start gap-2.5 rounded-xl bg-blue-50 px-4 py-3 text-[12.5px] leading-relaxed text-blue-900 ring-1 ring-blue-200">
+        <Hourglass size={16} className="mt-0.5 shrink-0" />
+        <p>
+          You said this is paid — thank you. Someone is reading the account for {inr(pay.amount)} right now. This page
+          closes on its own the moment they see it; nothing more is asked of you.
+        </p>
+      </div>
+    );
+  }
+
+  if (status && status !== 'PENDING') {
+    return (
+      <div className="flex items-start gap-2.5 rounded-xl bg-red-50 px-4 py-3 text-[12.5px] leading-relaxed text-red-800 ring-1 ring-red-200">
+        <AlertCircle size={16} className="mt-0.5 shrink-0" />
+        <p>
+          That payment request was closed without the money reaching {pay.payeeName}. Nothing is owed to us — pay at the
+          counter, or ask for a fresh code.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <p className="rounded-xl bg-ink-50 px-4 py-2.5 text-[12px] leading-relaxed text-ink-600 ring-1 ring-ink-200">
+      {pay.payUrl ? (
+        <>
+          Pay in any UPI app, then tap <span className="font-semibold">I’ve paid</span> on{' '}
+          <a href={pay.payUrl} target="_blank" rel="noreferrer" className="font-semibold text-ember-600 underline underline-offset-2">
+            the payment page
+          </a>{' '}
+          so the counter knows to look. The bill closes when the transfer shows in the account.
+        </>
+      ) : (
+        'The money goes straight to the restaurant’s own UPI account. Show the counter the confirmation in your UPI app and they close the bill.'
+      )}
+    </p>
   );
 }
 
