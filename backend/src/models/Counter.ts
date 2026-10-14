@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 
 const counterSchema = new Schema({
   key: { type: String, required: true, unique: true },
@@ -6,7 +7,7 @@ const counterSchema = new Schema({
 });
 
 export type Counter = InferSchemaType<typeof counterSchema>;
-export const CounterModel = model('Counter', counterSchema);
+export const CounterModel = defineModel('Counter', counterSchema) as unknown as Model<Counter>;
 
 /** Atomically increments a named counter (daily order/bill numbering). */
 export async function nextSeq(key: string): Promise<number> {

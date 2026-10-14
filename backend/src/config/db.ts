@@ -1,51 +1,20 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import mongoose from 'mongoose';
+import { resolve } from 'node:path';
 import { env } from './env';
+import { startStore } from '../store';
 
-let embedded: { stop: () => Promise<boolean> } | null = null;
-
-function mask(uri: string) {
-  return uri.replace(/\/\/([^@]+)@/, '//***@');
-}
-
+/**
+ * The restaurant's records are folders of JSON lines on this machine, so "connecting" means reading
+ * that tree into memory once, before the first request is served. There is no server to reach and
+ * nothing to fall back to: if the folder cannot be read, the process must say so rather than start
+ * and answer with an empty restaurant.
+ */
 export async function connectDb(): Promise<void> {
-  mongoose.set('strictQuery', true);
-
-  // Tests reconnect before every case; an already-open connection must be reused,
-  // otherwise a second mongod would fight for the same dbPath lock.
-  if (mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2) return;
-
-  if (env.MONGODB_URI) {
-    try {
-      await mongoose.connect(env.MONGODB_URI, { serverSelectionTimeoutMS: 2500 });
-      console.log(`[db] connected to ${mask(env.MONGODB_URI)}`);
-      return;
-    } catch (err) {
-      if (env.isProd) throw err;
-      console.warn('[db] MONGODB_URI unreachable — using embedded MongoDB for development');
-    }
-  }
-
-  if (env.isProd) {
-    throw new Error('MONGODB_URI is required in production');
-  }
-
-  const { MongoMemoryServer } = await import('mongodb-memory-server');
-  const dataDir = path.resolve(process.cwd(), '.data', env.isTest ? 'mongo-test' : 'mongo');
-  fs.mkdirSync(dataDir, { recursive: true });
-  const server = await MongoMemoryServer.create({
-    instance: { dbPath: dataDir, storageEngine: 'wiredTiger' },
-  });
-  embedded = server;
-  await mongoose.connect(server.getUri(env.isTest ? 'sizzle-test' : 'sizzle'));
-  console.log(`[db] embedded MongoDB started (data persists in ${path.relative(process.cwd(), dataDir)})`);
+  const dir = resolve(process.cwd(), env.ARCHIVE_DIR);
+  const { files, documents } = await startStore(dir);
+  if (documents) console.log(`[store] ${documents} records across ${files} files in ${dir}`);
+  else console.log(`[store] the archive is empty — ${dir}`);
 }
 
 export async function disconnectDb(): Promise<void> {
-  await mongoose.disconnect();
-  if (embedded) {
-    await embedded.stop();
-    embedded = null;
-  }
+  // Writes are flushed as they happen, so there is no buffer to drain here.
 }

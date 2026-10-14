@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { STATIONS } from '../types/constants';
 
 const productSchema = new Schema(
@@ -32,4 +33,4 @@ productSchema.index({ restaurantId: 1, categoryId: 1, sortOrder: 1 });
 productSchema.index({ restaurantId: 1, name: 1 });
 
 export type Product = InferSchemaType<typeof productSchema>;
-export const ProductModel = model('Product', productSchema);
+export const ProductModel = defineModel('Product', productSchema) as unknown as Model<Product>;

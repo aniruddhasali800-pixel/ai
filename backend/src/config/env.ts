@@ -52,7 +52,9 @@ export function isPrivateAddress(url: string): boolean {
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
-  MONGODB_URI: z.string().trim().optional(),
+  // The records live here as folders and JSON lines on this machine — see src/store/layout.ts.
+  // A relative path is taken against the directory the server was started from.
+  ARCHIVE_DIR: z.string().trim().default('.data/archive'),
 
   ACCESS_TOKEN_SECRET: z.string().min(16).default('dev-access-secret-0000000000'),
   REFRESH_TOKEN_SECRET: z.string().min(16).default('dev-refresh-secret-0000000000'),
@@ -100,7 +102,6 @@ if (!parsed.success) {
 if (parsed.data.NODE_ENV === 'production') {
   const placeholderSecrets = ['dev-access-secret-0000000000', 'dev-refresh-secret-0000000000'];
   const problems: string[] = [];
-  if (!parsed.data.MONGODB_URI) problems.push('MONGODB_URI is not set');
   if (placeholderSecrets.includes(parsed.data.ACCESS_TOKEN_SECRET ?? '')) {
     problems.push('ACCESS_TOKEN_SECRET is still the development default');
   }

@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { SESSION_STATUSES } from '../types/constants';
 
 const tableSessionSchema = new Schema(
@@ -21,4 +22,4 @@ tableSessionSchema.index({ restaurantId: 1, status: 1 });
 tableSessionSchema.index({ tableId: 1, status: 1 });
 
 export type TableSession = InferSchemaType<typeof tableSessionSchema>;
-export const TableSessionModel = model('TableSession', tableSessionSchema);
+export const TableSessionModel = defineModel('TableSession', tableSessionSchema) as unknown as Model<TableSession>;

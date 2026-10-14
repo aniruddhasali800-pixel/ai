@@ -5,6 +5,14 @@ import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/rbac';
 import {
+  buildDayClose,
+  dayCloseCsv,
+  dayWindow,
+  listDayCloses,
+  readDayClose,
+  writeDayClose,
+} from '../../services/dayClose.service';
+import {
   dashboard,
   operationsReport,
   paymentReport,
@@ -27,6 +35,11 @@ const rangeQuery = z.object({
 const salesQuery = rangeQuery.extend({
   granularity: z.enum(['day', 'week', 'month', 'year']).optional(),
 });
+
+/** An Indian business day, named the way the archive names its folders. */
+const DATE_LABEL = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the YYYY-MM-DD form');
 
 type RangeQuery = z.infer<typeof rangeQuery>;
 type SalesQuery = z.infer<typeof salesQuery>;
@@ -80,5 +93,63 @@ reportsRouter.get(
     const q = queryOf<RangeQuery>(req);
     const { from, to } = resolveRange(q.from, q.to, q.days ?? 30);
     res.json(await operationsReport(req.auth!.restaurantId, from, to));
+  }),
+);
+
+const dayCloseQuery = z.object({ date: DATE_LABEL.optional() });
+type DayCloseQuery = z.infer<typeof dayCloseQuery>;
+
+/**
+ * The day's close. A closed day is served from the file it was written to, so the numbers an owner
+ * approved at 8 pm are the numbers they see next week; an open day is built from the live records and
+ * marked as such, because nothing has been signed off yet.
+ */
+reportsRouter.get(
+  '/day-close',
+  requirePermission('reports:read'),
+  validate({ query: dayCloseQuery }),
+  asyncHandler(async (req, res) => {
+    const q = queryOf<DayCloseQuery>(req);
+    const window = dayWindow(q.date);
+    const stored = await readDayClose(req.auth!.restaurantId, window.date);
+    res.json(stored ? { ...stored, stored: true } : { ...(await buildDayClose(req.auth!.restaurantId, window.date)), stored: false });
+  }),
+);
+
+/** The days already written to the drive, newest first. */
+reportsRouter.get(
+  '/day-close/list',
+  requirePermission('reports:read'),
+  asyncHandler(async (req, res) => {
+    res.json(await listDayCloses(req.auth!.restaurantId));
+  }),
+);
+
+/** The same close as a spreadsheet, for the file the owner keeps off the system. */
+reportsRouter.get(
+  '/day-close/csv',
+  requirePermission('reports:read'),
+  validate({ query: dayCloseQuery }),
+  asyncHandler(async (req, res) => {
+    const q = queryOf<DayCloseQuery>(req);
+    const window = dayWindow(q.date);
+    const report = (await readDayClose(req.auth!.restaurantId, window.date)) ?? (await buildDayClose(req.auth!.restaurantId, window.date));
+    res.setHeader('content-type', 'text/csv; charset=utf-8');
+    res.setHeader('content-disposition', `attachment; filename="sizzle-${window.date}-day-close.csv"`);
+    res.send(dayCloseCsv(report));
+  }),
+);
+
+/**
+ * Closes a day now. The write replaces the pair on the drive, so a bill entered after the automatic
+ * 8 pm sweep still reaches the report the owner reads.
+ */
+reportsRouter.post(
+  '/day-close',
+  requirePermission('reports:read'),
+  validate({ body: dayCloseQuery }),
+  asyncHandler(async (req, res) => {
+    const body = (req.body ?? {}) as DayCloseQuery;
+    res.json(await writeDayClose(req.auth!.restaurantId, body.date));
   }),
 );

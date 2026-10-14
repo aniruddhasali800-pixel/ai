@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { FLOOR_ROLES } from '../types/constants';
 
 /**
@@ -35,4 +36,4 @@ staffApplicationSchema.index(
 );
 
 export type StaffApplication = InferSchemaType<typeof staffApplicationSchema>;
-export const StaffApplicationModel = model('StaffApplication', staffApplicationSchema);
+export const StaffApplicationModel = defineModel('StaffApplication', staffApplicationSchema) as unknown as Model<StaffApplication>;

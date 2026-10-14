@@ -7,6 +7,7 @@ import { FloorLayout } from './layouts/FloorLayout';
 import { PosLayout } from './layouts/PosLayout';
 import { Spinner } from './components/ui';
 import { Toaster } from './components/Toaster';
+import { FirstRun } from './components/FirstRun';
 
 const Hub = lazy(() => import('./pages/Hub').then((m) => ({ default: m.Hub })));
 const RegisterPage = lazy(() => import('./pages/Register').then((m) => ({ default: m.RegisterPage })));
@@ -108,6 +109,8 @@ export function App() {
       </Routes>
       {/* Every screen raises its notices here — the layouts are too busy to carry them. */}
       <Toaster />
+      {/* A machine that has never held a restaurant gets asked to open one before anything else. */}
+      <FirstRun />
     </Suspense>
   );
 }

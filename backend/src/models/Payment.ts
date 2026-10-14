@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { PAYMENT_METHODS, PAYMENT_STATUSES } from '../types/constants';
 
 const paymentSchema = new Schema(
@@ -38,4 +39,4 @@ paymentSchema.index({ restaurantId: 1, createdAt: -1 });
 paymentSchema.index({ providerOrderId: 1 }, { sparse: true });
 
 export type Payment = InferSchemaType<typeof paymentSchema>;
-export const PaymentModel = model('Payment', paymentSchema);
+export const PaymentModel = defineModel('Payment', paymentSchema) as unknown as Model<Payment>;

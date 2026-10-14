@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 
 const auditLogSchema = new Schema(
   {
@@ -18,4 +19,4 @@ auditLogSchema.index({ restaurantId: 1, createdAt: -1 });
 auditLogSchema.index({ restaurantId: 1, action: 1, createdAt: -1 });
 
 export type AuditLog = InferSchemaType<typeof auditLogSchema>;
-export const AuditLogModel = model('AuditLog', auditLogSchema);
+export const AuditLogModel = defineModel('AuditLog', auditLogSchema) as unknown as Model<AuditLog>;

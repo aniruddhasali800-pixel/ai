@@ -28,6 +28,7 @@ import {
   nextSeq,
 } from './models';
 import { hashPassword } from './modules/auth/auth.service';
+import { clearCollections } from './store';
 import { priceOrderItems, computeTotals, type IncomingItem } from './services/pricing.service';
 import { recordAudit } from './services/audit.service';
 import { notify } from './services/notification.service';
@@ -115,26 +116,8 @@ async function stampCreatedAt(
 /** Fills the connected database with the demo tenant. Safe to call from the server. */
 export async function seedDemoData(fresh = false): Promise<void> {
   if (fresh) {
-    const collections = await Promise.all([
-      AddonModel,
-      AuditLogModel,
-      BillModel,
-      BookingModel,
-      CategoryModel,
-      CounterModel,
-      CustomerRequestModel,
-      InventoryItemModel,
-      InventoryTransactionModel,
-      NotificationModel,
-      OrderModel,
-      PaymentModel,
-      ProductModel,
-      RestaurantModel,
-      TableModel,
-      TableSessionModel,
-      UserModel,
-    ].map((model) => model.collection.deleteMany({})));
-    console.log(`[seed] cleared ${collections.reduce((s, r) => s + (r.deletedCount ?? 0), 0)} documents`);
+    const cleared = await clearCollections();
+    console.log(`[seed] cleared ${cleared} documents`);
   }
 
   const already = await RestaurantModel.findOne({ slug: DEMO_TENANT_SLUG }).lean();

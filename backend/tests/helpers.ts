@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
-import mongoose, { Types } from 'mongoose';
+import { Types } from 'mongoose';
 import { connectDb, disconnectDb } from '../src/config/db';
+import { clearArchive } from '../src/store';
 import {
   CategoryModel,
   InventoryItemModel,
@@ -20,11 +21,10 @@ export async function disconnectTestDb() {
   await disconnectDb();
 }
 
+/** Empties the archive and opens a fresh one, so a case never inherits another case's records. */
 export async function resetDb() {
-  const db = mongoose.connection.db;
-  if (!db) throw new Error('Test database is not connected');
-  const collections = await db.collections();
-  await Promise.all(collections.map((collection) => collection.deleteMany({})));
+  await clearArchive();
+  await connectDb();
 }
 
 function uid(prefix: string): string {

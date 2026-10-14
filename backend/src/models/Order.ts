@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import {
   ORDER_FULFILMENT,
   ORDER_PAYMENT_MODES,
@@ -92,4 +93,4 @@ orderSchema.index(
 );
 
 export type Order = InferSchemaType<typeof orderSchema>;
-export const OrderModel = model('Order', orderSchema);
+export const OrderModel = defineModel('Order', orderSchema) as unknown as Model<Order>;

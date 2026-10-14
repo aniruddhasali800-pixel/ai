@@ -18,11 +18,20 @@ import { notificationsRouter } from './modules/notifications/notifications.route
 import { reportsRouter } from './modules/reports/reports.routes';
 import { auditRouter } from './modules/audit/audit.routes';
 import { integrationsRouter } from './modules/integrations/integrations.routes';
+import { root } from './store';
 
 export const apiRouter = Router();
 
 apiRouter.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'sizzle-api', env: env.NODE_ENV, time: new Date().toISOString() });
+  // The folder is part of the answer because this build keeps its records on the drive it runs from,
+  // and a first-time owner should be told where that is rather than have to find it.
+  res.json({
+    ok: true,
+    service: 'sizzle-api',
+    env: env.NODE_ENV,
+    time: new Date().toISOString(),
+    dataFolder: root(),
+  });
 });
 
 apiRouter.use('/public', publicRouter);

@@ -3,8 +3,12 @@
 # the API then serves, so the default Node build and start commands are enough.
 # Render publishes the service's own URL through RENDER_EXTERNAL_URL, and the config
 # reads it for the CORS allowlist. The host baked into QR codes and guest links is the
-# demo client's domain, since that is the address a customer's phone opens — so there is
-# nothing to type here except the database connection string.
+# demo client's domain, since that is the address a customer's phone opens.
+#
+# The API no longer needs a database URL: every record is a file in the archive folder under the
+# service's own filesystem (`ARCHIVE_DIR`, default `.data/archive`). On this free plan that folder is
+# recreated empty at each deploy, so a pushed build starts with no restaurants until it seeds one —
+# a plan with a persistent disk is what makes the hosted archive survive a deploy.
 services:
   - type: web
     name: sizzle
@@ -20,8 +24,7 @@ services:
         value: production
       - key: NODE_VERSION
         value: '22'
-      # Atlas (or any reachable MongoDB). Required in production, and required at all
-      # if you want to seed from a Render shell — an in-container database cannot be
-      # reached from the shell's own filesystem.
+      # No longer read by the API, which keeps its records in the archive folder. It stays here so an
+      # existing deployment's value is not deleted by a blueprint sync.
       - key: MONGODB_URI
         sync: false

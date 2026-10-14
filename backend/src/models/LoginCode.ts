@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 
 /**
  * A one-time sign-in code for a staff phone. Only the hash is stored, it is worth minutes, and
@@ -20,4 +21,4 @@ const loginCodeSchema = new Schema(
 loginCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export type LoginCode = InferSchemaType<typeof loginCodeSchema>;
-export const LoginCodeModel = model('LoginCode', loginCodeSchema);
+export const LoginCodeModel = defineModel('LoginCode', loginCodeSchema) as unknown as Model<LoginCode>;

@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { TABLE_STATUSES } from '../types/constants';
 
 const tableSchema = new Schema(
@@ -21,4 +22,4 @@ tableSchema.index({ restaurantId: 1, number: 1 }, { unique: true });
 tableSchema.index({ restaurantId: 1, status: 1 });
 
 export type Table = InferSchemaType<typeof tableSchema>;
-export const TableModel = model('Table', tableSchema);
+export const TableModel = defineModel('Table', tableSchema) as unknown as Model<Table>;

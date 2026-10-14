@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { INVENTORY_UNITS } from '../types/constants';
 
 const inventoryItemSchema = new Schema(
@@ -18,4 +19,4 @@ const inventoryItemSchema = new Schema(
 inventoryItemSchema.index({ restaurantId: 1, name: 1 }, { unique: true });
 
 export type InventoryItem = InferSchemaType<typeof inventoryItemSchema>;
-export const InventoryItemModel = model('InventoryItem', inventoryItemSchema);
+export const InventoryItemModel = defineModel('InventoryItem', inventoryItemSchema) as unknown as Model<InventoryItem>;

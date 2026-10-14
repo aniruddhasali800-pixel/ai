@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { ROLES } from '../types/constants';
 import { phoneDigits } from '../utils/phone';
 
@@ -33,4 +34,4 @@ userSchema.pre('save', function stampPhoneDigits(next) {
 });
 
 export type User = InferSchemaType<typeof userSchema>;
-export const UserModel = model('User', userSchema);
+export const UserModel = defineModel('User', userSchema) as unknown as Model<User>;

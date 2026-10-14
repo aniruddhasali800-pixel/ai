@@ -12,6 +12,11 @@ export function num(n: number, digits = 0): string {
   return n.toLocaleString('en-IN', { maximumFractionDigits: digits });
 }
 
+/** A count that agrees with its own noun. */
+export function count(n: number, one: string, many = `${one}s`): string {
+  return `${num(n)} ${n === 1 ? one : many}`;
+}
+
 export function timeAgo(input: string | Date | null | undefined): string {
   if (!input) return '';
   const then = typeof input === 'string' ? new Date(input).getTime() : input.getTime();

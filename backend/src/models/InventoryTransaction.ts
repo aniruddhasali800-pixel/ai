@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { INVENTORY_TX_TYPES } from '../types/constants';
 
 const inventoryTransactionSchema = new Schema(
@@ -19,4 +20,4 @@ inventoryTransactionSchema.index({ restaurantId: 1, itemId: 1, createdAt: -1 });
 inventoryTransactionSchema.index({ restaurantId: 1, createdAt: -1 });
 
 export type InventoryTransaction = InferSchemaType<typeof inventoryTransactionSchema>;
-export const InventoryTransactionModel = model('InventoryTransaction', inventoryTransactionSchema);
+export const InventoryTransactionModel = defineModel('InventoryTransaction', inventoryTransactionSchema) as unknown as Model<InventoryTransaction>;

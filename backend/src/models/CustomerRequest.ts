@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { REQUEST_TYPES } from '../types/constants';
 
 const customerRequestSchema = new Schema(
@@ -27,4 +28,4 @@ const customerRequestSchema = new Schema(
 customerRequestSchema.index({ restaurantId: 1, status: 1, createdAt: -1 });
 
 export type CustomerRequest = InferSchemaType<typeof customerRequestSchema>;
-export const CustomerRequestModel = model('CustomerRequest', customerRequestSchema);
+export const CustomerRequestModel = defineModel('CustomerRequest', customerRequestSchema) as unknown as Model<CustomerRequest>;

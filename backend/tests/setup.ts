@@ -1,6 +1,6 @@
 process.env.NODE_ENV = 'test';
-// Force the embedded MongoDB so tests never touch a real database.
-process.env.MONGODB_URI = '';
+// The records are folders on this machine now, so the suite gets its own folder beside the real one.
+process.env.ARCHIVE_DIR = '.data/archive-test';
 process.env.ACCESS_TOKEN_SECRET = 'test-access-secret-0000000000';
 process.env.REFRESH_TOKEN_SECRET = 'test-refresh-secret-0000000000';
 process.env.PAYMENT_WEBHOOK_SECRET = 'test-payment-webhook-secret';

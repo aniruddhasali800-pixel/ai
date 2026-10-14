@@ -108,6 +108,7 @@ export const NOTIFICATION_TYPES = [
   'BOOKING_REMINDER',
   'LOW_STOCK',
   'DELIVERY_ORDER',
+  'DAY_CLOSE',
   'SYSTEM',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 import { FLOOR_ROLES } from '../types/constants';
 
 const restaurantSchema = new Schema(
@@ -51,4 +52,4 @@ const restaurantSchema = new Schema(
 );
 
 export type Restaurant = InferSchemaType<typeof restaurantSchema>;
-export const RestaurantModel = model('Restaurant', restaurantSchema);
+export const RestaurantModel = defineModel('Restaurant', restaurantSchema) as unknown as Model<Restaurant>;

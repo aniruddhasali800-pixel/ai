@@ -1,4 +1,5 @@
-import { Schema, model, type InferSchemaType } from 'mongoose';
+import { Schema, type InferSchemaType, type Model } from 'mongoose';
+import { defineModel } from '../store';
 
 const addonSchema = new Schema(
   {
@@ -13,4 +14,4 @@ const addonSchema = new Schema(
 addonSchema.index({ restaurantId: 1, name: 1 }, { unique: true });
 
 export type Addon = InferSchemaType<typeof addonSchema>;
-export const AddonModel = model('Addon', addonSchema);
+export const AddonModel = defineModel('Addon', addonSchema) as unknown as Model<Addon>;

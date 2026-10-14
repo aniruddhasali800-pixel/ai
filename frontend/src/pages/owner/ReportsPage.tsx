@@ -5,7 +5,8 @@ import type { OperationsReport, PaymentReport, ProductReport, SalesReport } from
 import { SOURCE_META } from '../../lib/statusMaps';
 import { inr, num, dayMonth } from '../../lib/format';
 import { BarRows, Donut, DayBars, AreaChart } from '../../components/charts';
-import { Button, Card, SegmentedControl, StatTile, Spinner } from '../../components/ui';
+import { Button, Card, SegmentedControl, StatTile, Spinner, Tabs } from '../../components/ui';
+import { DayClosePanel } from './DayClosePanel';
 import { useAuth } from '../../store/auth';
 import { toast } from '../../store/toasts';
 
@@ -16,23 +17,37 @@ const RANGES = [
   { value: '365', label: 'Year' },
 ];
 
+const VIEWS: { value: 'trends' | 'endOfDay'; label: string }[] = [
+  { value: 'trends', label: 'Trends' },
+  { value: 'endOfDay', label: 'End of day' },
+];
+
 export function ReportsPage() {
   const { restaurant } = useAuth();
+  const [view, setView] = useState<'trends' | 'endOfDay'>('trends');
   const [days, setDays] = useState('30');
   const [granularity, setGranularity] = useState<'day' | 'week' | 'month' | 'year'>('day');
 
-  const { data: sales, loading: l1 } = useQuery<SalesReport>('reports:sales', '/reports/sales', { days, granularity });
-  const { data: products } = useQuery<ProductReport>('reports:products', '/reports/products', { days });
-  const { data: payments } = useQuery<PaymentReport>('reports:payments', '/reports/payments', { days });
-  const { data: ops } = useQuery<OperationsReport>('reports:operations', '/reports/operations', { days });
+  // The close only reads one day, so the range reports stay unloaded until the trend tab is opened.
+  const trends = view === 'trends';
+  const { data: sales, loading: l1 } = useQuery<SalesReport>('reports:sales', '/reports/sales', { days, granularity }, { enabled: trends });
+  const { data: products } = useQuery<ProductReport>('reports:products', '/reports/products', { days }, { enabled: trends });
+  const { data: payments } = useQuery<PaymentReport>('reports:payments', '/reports/payments', { days }, { enabled: trends });
+  const { data: ops } = useQuery<OperationsReport>('reports:operations', '/reports/operations', { days }, { enabled: trends });
 
-  if (l1 && !sales) return <Spinner label="Crunching the numbers…" />;
+  if (trends && l1 && !sales) return <Spinner label="Crunching the numbers…" />;
 
   const t = sales?.totals;
   const dineIn = sales?.channels.find((c) => c.channel === 'DINE_IN');
 
   return (
     <div className="space-y-4">
+      <Tabs tabs={VIEWS} active={view} onChange={setView} />
+
+      {view === 'endOfDay' && <DayClosePanel />}
+
+      {trends && (
+        <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SegmentedControl size="sm" options={RANGES} value={days} onChange={setDays} />
         <div className="flex items-center gap-2">
@@ -175,10 +190,13 @@ export function ReportsPage() {
               {(ops?.bookings ?? []).map((b) => (
                 <li key={b.status} className="flex justify-between"><span className="text-ink-500">{b.status.toLowerCase()}</span><span className="font-semibold tabular-nums">{b.count}</span></li>
               ))}
+              {!ops?.bookings.length && <li className="col-span-2 text-center text-ink-500">No bookings yet.</li>}
             </ul>
           </div>
         </Card>
       </div>
+        </>
+      )}
     </div>
   );
 }

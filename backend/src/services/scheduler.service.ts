@@ -1,5 +1,6 @@
 import { BookingModel, RestaurantModel, TableModel } from '../models';
 import { emit, Events } from '../realtime/emit';
+import { runDayCloseSweep } from './dayClose.service';
 import { notify, notifyRoles } from './notification.service';
 import { setTableStatus } from './table.service';
 
@@ -8,16 +9,18 @@ let timer: NodeJS.Timeout | null = null;
 let running = false;
 
 /**
- * Background loop: booking reminders, pre-arrival table reservations and
- * stale-session housekeeping. Every action is idempotent so missed ticks are safe.
+ * Background loop: booking reminders, pre-arrival table reservations,
+ * stale-session housekeeping and the automatic end-of-day close. Every action is idempotent so
+ * missed ticks are safe.
  */
-export async function tick(): Promise<{ reminders: number; reserved: number }> {
-  if (running) return { reminders: 0, reserved: 0 };
+export async function tick(): Promise<{ reminders: number; reserved: number; closed: number }> {
+  if (running) return { reminders: 0, reserved: 0, closed: 0 };
   running = true;
   try {
     const reminders = await sendBookingReminders();
     const reserved = await reserveUpcomingTables();
-    return { reminders, reserved };
+    const closed = (await runDayCloseSweep()).length;
+    return { reminders, reserved, closed };
   } finally {
     running = false;
   }

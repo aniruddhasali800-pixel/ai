@@ -42,6 +42,7 @@ export type NotificationType =
   | 'BOOKING_REMINDER'
   | 'LOW_STOCK'
   | 'DELIVERY_ORDER'
+  | 'DAY_CLOSE'
   | 'SYSTEM';
 
 export interface Address {
@@ -742,4 +743,112 @@ export interface AppSitResult {
   session: { _id: string; publicToken: string; status: SessionStatus; guestCount: number; customerName: string };
   table: { id: string; number: string; section: string };
   restaurantId: string;
+}
+
+/** One bill as the end-of-day file remembers it. */
+export interface DayCloseBill {
+  billId: string;
+  billNumber: string;
+  issuedAt: string;
+  tableNumber: string;
+  customerName: string;
+  orders: number;
+  subtotal: number;
+  taxTotal: number;
+  serviceCharge: number;
+  discountAmount: number;
+  roundOff: number;
+  grandTotal: number;
+  status: string;
+  paymentStatus: string;
+  methods: string[];
+  collected: number;
+  paidAt: string | null;
+  issuedBy: string;
+}
+
+export interface DayCloseOrder {
+  orderId: string;
+  orderNumber: string;
+  placedAt: string;
+  completedAt: string | null;
+  source: string;
+  status: string;
+  paymentStatus: string;
+  channel: 'DINE_IN' | 'DELIVERY' | 'TAKEAWAY';
+  tableNumber: string;
+  waiter: string;
+  items: number;
+  quantity: number;
+  subtotal: number;
+  taxTotal: number;
+  serviceCharge: number;
+  discountAmount: number;
+  grandTotal: number;
+}
+
+/** The day's close, exactly as it was written to the drive. */
+export interface DayCloseReport {
+  kind: 'day-close';
+  restaurant: { id: string; name: string; slug: string };
+  date: string;
+  window: { from: string; to: string };
+  generatedAt: string;
+  /** False while the day is still running, so the screen can say the numbers are not signed off yet. */
+  stored: boolean;
+  totals: {
+    revenue: number;
+    orders: number;
+    avgOrderValue: number;
+    covers: number;
+    tax: number;
+    serviceCharge: number;
+    discount: number;
+    collected: number;
+    refunded: number;
+    net: number;
+    bills: number;
+    unpaidBills: number;
+    unpaidAmount: number;
+    cancelledOrders: number;
+  };
+  versus: {
+    date: string;
+    revenue: number;
+    orders: number;
+    revenueDelta: number;
+    revenueDeltaPct: number;
+    ordersDelta: number;
+    avgOrderValueDelta: number;
+  };
+  hourly: { hour: number; orders: number; revenue: number }[];
+  channels: { channel: string; revenue: number; orders: number }[];
+  sources: { source: string; revenue: number; orders: number }[];
+  methods: { method: string; amount: number; count: number }[];
+  providers: { provider: string; amount: number; count: number }[];
+  awaitingVerification: { amount: number; count: number };
+  cashierPerformance: { userId: string; name: string; collected: number; count: number }[];
+  topProducts: { productId: string | null; name: string; category: string; qty: number; revenue: number }[];
+  categories: { category: string; qty: number; revenue: number }[];
+  slowMovers: { productId: string | null; name: string; qty: number; revenue: number }[];
+  waiters: { userId: string; name: string; orders: number; revenue: number }[];
+  occupancy: { date: string; sessions: number; guests: number; avgMinutes: number }[];
+  taxBreakup: { label: string; percent: number; amount: number }[];
+  bookings: { status: string; count: number }[];
+  stock: {
+    movements: { item: string; type: string; qty: number; unit: string; balanceAfter: number; at: string }[];
+    used: { item: string; unit: string; qty: number }[];
+    totals: { type: string; qty: number }[];
+    low: { item: string; stock: number; unit: string; threshold: number }[];
+  };
+  bills: DayCloseBill[];
+  orders: DayCloseOrder[];
+}
+
+export interface DayCloseSummary {
+  date: string;
+  revenue: number;
+  orders: number;
+  bills: number;
+  generatedAt: string;
 }
