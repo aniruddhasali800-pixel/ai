@@ -16,11 +16,13 @@ export function ImagePicker({
   value,
   onChange,
   className = '',
+  uploadUrl = '/uploads',
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   className?: string;
+  uploadUrl?: string;
 }) {
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -36,7 +38,7 @@ export function ImagePicker({
     try {
       const form = new FormData();
       form.append('file', file);
-      const { data } = await http.post<{ url: string }>('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await http.post<{ url: string }>(uploadUrl, form, { headers: { 'Content-Type': 'multipart/form-data' } });
       onChange(data.url);
       toast(`${label} added`, 'success');
     } catch (e) {

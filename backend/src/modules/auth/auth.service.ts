@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { Types } from 'mongoose';
 import { timingSafeEqual } from 'node:crypto';
-import { RestaurantModel, UserModel } from '../../models';
+import { CategoryModel, RestaurantModel, TableModel, UserModel } from '../../models';
 import { env, DEMO_MASTER_PASSWORD, DEMO_TENANT_SLUG } from '../../config/env';
 import { ApiError } from '../../utils/httpError';
 import { signAccessToken, type AccessPayload } from '../../middleware/auth';
@@ -75,6 +76,14 @@ export async function registerOwner(input: {
   phone?: string;
   password: string;
   cuisine?: string;
+  logoUrl?: string;
+  tagline?: string;
+  address?: {
+    line1?: string;
+    city?: string;
+    state?: string;
+    pincode?: string;
+  };
 }) {
   if (!input.email && !input.phone) {
     throw ApiError.badRequest('Provide an email or a phone number to sign in with');
@@ -87,16 +96,27 @@ export async function registerOwner(input: {
   let slug = slugify(input.restaurantName);
   if (await RestaurantModel.exists({ slug })) slug = `${slug}-${randomToken(3).toLowerCase()}`;
 
+  const restaurantId = new Types.ObjectId();
+  const ownerId = new Types.ObjectId();
+
   const restaurant = await RestaurantModel.create({
-    ownerId: null,
+    _id: restaurantId,
+    ownerId,
     name: input.restaurantName,
     slug,
     email: input.email?.toLowerCase(),
     phone: input.phone,
+    address: input.address,
+    branding: {
+      logoUrl: input.logoUrl ?? '',
+      coverUrl: '',
+      tagline: input.tagline ?? '',
+    },
   });
 
   const user = await UserModel.create({
-    restaurantId: restaurant._id,
+    _id: ownerId,
+    restaurantId,
     role: 'OWNER',
     name: input.name,
     email: input.email?.toLowerCase(),
@@ -104,8 +124,22 @@ export async function registerOwner(input: {
     passwordHash: await bcrypt.hash(input.password, BCRYPT_ROUNDS),
   });
 
-  restaurant.ownerId = user._id;
-  await restaurant.save();
+  // Create starter tables and starter categories for the new restaurant
+  await CategoryModel.insertMany([
+    { restaurantId: restaurant._id, name: 'Starters', sortOrder: 1, isActive: true },
+    { restaurantId: restaurant._id, name: 'Main Course', sortOrder: 2, isActive: true },
+    { restaurantId: restaurant._id, name: 'Beverages', sortOrder: 3, isActive: true },
+    { restaurantId: restaurant._id, name: 'Desserts', sortOrder: 4, isActive: true },
+  ]);
+
+  const starterTables = [1, 2, 3, 4, 5].map((num) => ({
+    restaurantId: restaurant._id,
+    number: String(num),
+    capacity: 4,
+    section: 'Main',
+    qrToken: randomToken(16),
+  }));
+  await TableModel.insertMany(starterTables);
 
   await recordAudit({
     restaurantId: String(restaurant._id),

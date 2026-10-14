@@ -9,6 +9,7 @@ import {
   ConciergeBell,
   ClipboardList,
   MessageSquareText,
+  Store,
 } from 'lucide-react';
 import { Brand } from '../layouts/AppShell';
 import { Button, Field, Input, SegmentedControl } from '../components/ui';
@@ -180,8 +181,8 @@ export function LoginPage() {
           )}
 
           <div className="mt-7 flex items-center justify-between text-[13px]">
-            <Link to="/register" className="inline-flex items-center gap-1.5 font-semibold text-ember-600 hover:underline">
-              <FlaskConical size={14} /> Onboard a restaurant
+            <Link to="/register" className="inline-flex items-center gap-1.5 font-semibold text-ember-600 hover:text-ember-700 hover:underline">
+              <Store size={15} /> Open / Register new restaurant →
             </Link>
             <Link to="/book/saffron-and-smoke" className="text-ink-500 hover:text-ink-800">
               Book a table →

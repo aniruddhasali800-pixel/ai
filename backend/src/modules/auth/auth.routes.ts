@@ -22,6 +22,16 @@ authRouter.post(
       phone: z.string().min(8).max(15).optional(),
       password: passwordSchema,
       cuisine: z.string().max(60).optional(),
+      logoUrl: z.string().max(500).optional(),
+      tagline: z.string().max(160).optional(),
+      address: z
+        .object({
+          line1: z.string().max(120).optional(),
+          city: z.string().max(60).optional(),
+          state: z.string().max(60).optional(),
+          pincode: z.string().max(10).optional(),
+        })
+        .optional(),
     }),
   }),
   asyncHandler(async (req, res) => {
