@@ -17,7 +17,6 @@ let authToken: string | null = null;
 let generation = 0;
 const generationListeners = new Set<() => void>();
 
-let failedHandshakes = 0;
 let recovering = false;
 let authResolver: (() => Promise<string>) | null = null;
 
@@ -44,17 +43,16 @@ function subscribeGeneration(listener: () => void) {
 
 function attachRoomReplays(target: Socket) {
   target.on('connect', () => {
-    failedHandshakes = 0;
     recovering = false;
     for (const token of joinedSessions) target.emit('join:session', { token });
     for (const token of joinedOrders) target.emit('join:order', { token });
   });
-  target.on('connect_error', () => {
-    failedHandshakes += 1;
-    // One failure is usually just the Render service waking up. A second in a row on a staff
-    // socket means the handshake token has aged out, and a screen nobody touched makes no HTTP
-    // call that would refresh it — so the socket has to ask for a new one itself.
-    if (failedHandshakes < 2 || recovering || !authToken || !authResolver) return;
+  target.on('connect_error', (err: Error) => {
+    // Counting failures and blaming the token was wrong twice over: a proxy that cannot carry the
+    // transport and a server that refused the credential look identical from here, and mistaking the
+    // one for the other minted a fresh token, re-opened the socket, failed the same way and minted
+    // another. Only the server's own refusal of the credential asks for a new one, and it asks once.
+    if (!/unauthor/i.test(String(err?.message ?? '')) || recovering || !authToken || !authResolver) return;
     recovering = true;
     void authResolver().catch(() => {
       recovering = false;
@@ -67,7 +65,6 @@ export function connectRealtime(token: string | null) {
   // the socket down there would drop every listener for no reason.
   if (socket && token === authToken) return socket;
   authToken = token;
-  failedHandshakes = 0;
   recovering = false;
   if (socket) {
     socket.removeAllListeners();
@@ -77,7 +74,12 @@ export function connectRealtime(token: string | null) {
   socket = io(API_ROOT || undefined, {
     path: '/socket.io',
     auth: token ? { token } : {},
-    transports: ['websocket', 'polling'],
+    // Polling first, then upgrade. Asking for a WebSocket before anything has proven that the path
+    // between the browser and the API can carry one — a proxy in front of a separate API host usually
+    // cannot — leaves the screen with no transport at all, retrying the same failed upgrade forever.
+    // Plain HTTP polling goes through wherever the API calls themselves already go through.
+    transports: ['polling', 'websocket'],
+    upgrade: true,
   });
   attachRoomReplays(socket);
   announce();
