@@ -134,7 +134,9 @@ restaurantRouter.patch(
     }
 
     const restaurant = await RestaurantModel.findByIdAndUpdate(restaurantId, update, { new: true }).lean();
-    emit.toRestaurant(restaurantId, Events.MENU_UPDATED, { reason: 'settings' });
+    // Its own event: a settings change moves the branding, the hours and the QR targets, and every
+    // screen that shows one of those has to repaint, not just the menu.
+    emit.toRestaurant(restaurantId, Events.SETTINGS_UPDATED, {});
 
     const changed = Object.keys(req.body);
     await recordAudit({

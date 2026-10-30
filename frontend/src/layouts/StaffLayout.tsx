@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { AppShell, type NavItem } from './AppShell';
 import { useAuth } from '../store/auth';
-import { useRealtimeShell } from '../hooks/useRealtimeShell';
 import { can } from '../store/auth';
 
 const NAV: (NavItem & { permission: string })[] = [
@@ -38,7 +37,6 @@ const NAV: (NavItem & { permission: string })[] = [
 
 export function StaffLayout() {
   const { user, restaurant, ready } = useAuth();
-  useRealtimeShell();
   const location = useLocation();
 
   if (!ready) return null;

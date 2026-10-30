@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { useAuth } from '../store/auth';
+import { onRealtimeAuthFailure } from './socket';
 
 /**
  * Where the API lives. Empty means "this same server", which is how the app runs in
@@ -49,8 +50,32 @@ async function refreshAccessToken(): Promise<string> {
   }
 }
 
+/**
+ * The socket carries the same access token as the HTTP calls and outlives it by design: a kitchen
+ * screen left open all night makes no request of its own, so nothing would ever refresh the token it
+ * handshakes with. Handing the refresher over lets the socket re-authenticate itself instead of
+ * going quietly silent.
+ */
+onRealtimeAuthFailure(refreshAccessToken);
+
+/** Raised when the API answers with the single-page app instead of data. */
+class ShellAnswerError extends Error {
+  constructor(url: string) {
+    super(`The server answered ${url} with a web page instead of data — the request never reached the API`);
+    this.name = 'ShellAnswerError';
+  }
+}
+
 http.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // A hosted client proxies /api to another service, and the proxy's own catch-all answers an
+    // unmatched path with index.html and a 200. Axios treats that as success, so a save that never
+    // arrived would toast "saved" over an empty folder. HTML where JSON belongs is a failure.
+    if (String(res.headers?.['content-type'] ?? '').includes('text/html')) {
+      throw new ShellAnswerError(res.config?.url ?? 'that request');
+    }
+    return res;
+  },
   async (error: AxiosError) => {
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
     const status = error.response?.status;

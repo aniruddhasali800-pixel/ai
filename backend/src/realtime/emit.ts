@@ -28,6 +28,8 @@ export const Events = {
   TABLE_AVAILABLE: 'table.available',
   SESSION_UPDATED: 'session.updated',
   MENU_UPDATED: 'menu.updated',
+  SETTINGS_UPDATED: 'settings.updated',
+  DAY_CLOSE_UPDATED: 'dayclose.closed',
   INVENTORY_UPDATED: 'inventory.updated',
   INVENTORY_LOW_STOCK: 'inventory.low_stock',
   NOTIFICATION: 'notification:new',

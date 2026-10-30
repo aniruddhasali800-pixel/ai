@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useRealtimeEvent } from '../lib/socket';
-import { invalidate, invalidateMany } from '../lib/query';
+import { useRealtimeConnected, useRealtimeEvent } from '../lib/socket';
+import { invalidate, invalidateMany, revalidateAll } from '../lib/query';
 import { useNotifications } from '../store/notifications';
 import { useToasts } from '../store/toasts';
 import { useAuth } from '../store/auth';
@@ -22,6 +22,9 @@ export function useRealtimeShell() {
     receive(n);
     const tone = n.type === 'PAYMENT_FAILED' || n.type === 'LOW_STOCK' ? 'error' : 'event';
     push({ kind: tone, title: n.title, body: n.body });
+    // A closed day arrives as a notice, and the report panel is the notice's subject: whoever is
+    // looking at the reports has to see the finished day, not the snapshot they opened an hour ago.
+    if (n.type === 'DAY_CLOSE') invalidateMany(['dayclose', 'reports', 'dashboard']);
   });
 
   const onOrder = (o: Order) => {
@@ -41,7 +44,7 @@ export function useRealtimeShell() {
   useRealtimeEvent('order.cancelled', onOrder);
   useRealtimeEvent('order.updated', onOrder);
 
-  useRealtimeEvent('delivery.order', () => invalidateMany(['orders', 'kds', 'reports', 'dashboard']));
+  useRealtimeEvent('delivery.order', () => invalidateMany(['orders', 'kds', 'reports', 'dashboard', 'integrations']));
 
   const onTable = () => invalidateMany(['floor', 'tables', 'dashboard', 'waiter', 'hub']);
   useRealtimeEvent('table.updated', onTable);
@@ -82,8 +85,16 @@ export function useRealtimeShell() {
   // not ping the waiter with the news they just caused.
   useRealtimeEvent('request.updated', () => invalidateMany(['requests', 'floor', 'waiter', 'hub']));
 
-  useRealtimeEvent('menu.updated', () => invalidate('menu'));
-  useRealtimeEvent('staff.updated', () => invalidate('staff'));
+  // The same menu is read under three different keys by three different clients, and a price or a
+  // disabled dish has to leave the guest's phone as soon as it leaves the kitchen's screen.
+  useRealtimeEvent('menu.updated', () => invalidateMany(['menu', 'app:menu', 'guest:menu', 'reports']));
+  // Settings move the branding, the hours, the payee and the QR targets, so everything that shows one
+  // of those repaints: the owner's forms, the guest's app, the counter's bill pages.
+  useRealtimeEvent('settings.updated', () =>
+    invalidateMany(['restaurants', 'app', 'guest', 'menu', 'payments', 'bills', 'dashboard']),
+  );
+  useRealtimeEvent('dayclose.closed', () => invalidateMany(['dayclose', 'reports', 'dashboard']));
+  useRealtimeEvent('staff.updated', () => invalidateMany(['staff', 'restaurants', 'dashboard']));
   const onInventory = () => invalidateMany(['inventory', 'dashboard']);
   useRealtimeEvent('inventory.updated', onInventory);
   useRealtimeEvent('inventory.low_stock', (payload: { name?: string }) => {
@@ -97,6 +108,23 @@ export function useRealtimeShell() {
     // Re-arm notifications when the acting user changes (login / role switch).
     void userId;
   }, [userId]);
+
+  // The socket is the fast path, not a guarantee: a hosted instance sleeps between customers, and a
+  // handshake refused by a cold service can stay refused. While nothing is listening, every mounted
+  // screen asks again on a minute and whenever the tab is looked at, so a figure nobody refreshed is
+  // at worst a minute old rather than closed for the evening.
+  const connected = useRealtimeConnected();
+  useEffect(() => {
+    if (connected) return;
+    const ask = () => revalidateAll();
+    const timer = setInterval(ask, 60_000);
+    const onShow = () => document.visibilityState === 'visible' && ask();
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onShow);
+    };
+  }, [connected]);
 }
 
 /** Call after a local mutation to refresh the affected slices immediately. */

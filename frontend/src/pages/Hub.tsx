@@ -29,7 +29,7 @@ import { Button, LinkButton, Pill } from '../components/ui';
 import { invalidate, useQuery } from '../lib/query';
 import { errMsg } from '../lib/api';
 import { can, useAuth } from '../store/auth';
-import { connectRealtime, useRealtimeConnected } from '../lib/socket';
+import { useRealtimeConnected } from '../lib/socket';
 import { toast } from '../store/toasts';
 import { homeFor } from './Login';
 import { DEMO_MASTER, demoPassword } from '../lib/demoAccounts';
@@ -119,7 +119,6 @@ export function Hub() {
     setBusyEmail(screen.email);
     try {
       await login(screen.email, demoPassword(screen.email));
-      connectRealtime(useAuth.getState().accessToken);
       // Different identity, different world — drop everything cached under the old session.
       invalidate();
       navigate(screen.path);

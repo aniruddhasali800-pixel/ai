@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Inbox, ReceiptText, LayoutDashboard, LogOut } from 'lucide-react';
 import { useAuth, can } from '../store/auth';
-import { useRealtimeShell } from '../hooks/useRealtimeShell';
 import { NotificationBell } from '../components/NotificationBell';
 import { Brand } from './AppShell';
 import { useQuery } from '../lib/query';
@@ -12,7 +11,6 @@ export function PosLayout() {
   const { user, ready, restaurant, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  useRealtimeShell();
   const { data: requests } = useQuery<Paginated<CustomerRequest>>('requests:list', '/waiters/requests');
 
   useEffect(() => {

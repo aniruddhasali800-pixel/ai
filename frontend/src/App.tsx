@@ -8,6 +8,7 @@ import { PosLayout } from './layouts/PosLayout';
 import { Spinner } from './components/ui';
 import { Toaster } from './components/Toaster';
 import { FirstRun } from './components/FirstRun';
+import { useRealtimeShell } from './hooks/useRealtimeShell';
 
 const Hub = lazy(() => import('./pages/Hub').then((m) => ({ default: m.Hub })));
 const RegisterPage = lazy(() => import('./pages/Register').then((m) => ({ default: m.RegisterPage })));
@@ -47,6 +48,10 @@ const AppTrack = lazy(() => import('./pages/app/AppTrack').then((m) => ({ defaul
 const MockCheckout = lazy(() => import('./pages/app/MockCheckout').then((m) => ({ default: m.MockCheckout })));
 
 export function App() {
+  // One listener set for the whole app, mounted here rather than in the staff layouts: a report, a
+  // delivery queue or a guest menu opened directly has to repaint on the server's word too, and a
+  // screen that only listens while a particular layout is on screen is a screen that needs a refresh.
+  useRealtimeShell();
   return (
     <Suspense fallback={<div className="grid min-h-screen place-items-center bg-ink-50"><Spinner label="Loading…" /></div>}>
       <Routes>

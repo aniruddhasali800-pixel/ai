@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { CalendarCheck, ClipboardList, LogOut, PlusCircle, LayoutDashboard, Users } from 'lucide-react';
 import { useAuth, can } from '../store/auth';
-import { useRealtimeShell } from '../hooks/useRealtimeShell';
 import { NotificationBell } from '../components/NotificationBell';
 import { Brand } from './AppShell';
 
@@ -10,7 +9,6 @@ export function FloorLayout() {
   const { user, ready, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  useRealtimeShell();
 
   useEffect(() => {
     document.title = 'Sizzle — Floor';

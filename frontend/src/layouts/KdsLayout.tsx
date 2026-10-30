@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { ChefHat, Flame, LayoutDashboard, LogOut, RefreshCw } from 'lucide-react';
 import { useAuth } from '../store/auth';
-import { useRealtimeShell } from '../hooks/useRealtimeShell';
 import { LiveChip } from './AppShell';
 import { invalidate } from '../lib/query';
 import { clockTime } from '../lib/format';
@@ -10,7 +9,6 @@ import { clockTime } from '../lib/format';
 export function KdsLayout() {
   const { user, ready, logout } = useAuth();
   const navigate = useNavigate();
-  useRealtimeShell();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 20_000);

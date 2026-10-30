@@ -189,7 +189,7 @@ function ItemModal({ item, onClose }: { item?: InventoryItem; onClose: () => voi
           <Input type="number" value={form.costPerUnit} onChange={(e) => setForm((f) => ({ ...f, costPerUnit: Number(e.target.value) }))} />
         </Field>
         <Field label="Reorder level" hint={isEdit ? 'Changing stock needs an adjustment entry' : undefined}>
-          <Input type="number" value={form.lowStockThreshold} disabled={isEdit} onChange={(e) => setForm((f) => ({ ...f, lowStockThreshold: Number(e.target.value) }))} />
+          <Input type="number" value={form.lowStockThreshold} onChange={(e) => setForm((f) => ({ ...f, lowStockThreshold: Number(e.target.value) }))} />
         </Field>
         <Field label="Opening stock"><Input type="number" value={form.stock} disabled={isEdit} onChange={(e) => setForm((f) => ({ ...f, stock: Number(e.target.value) }))} /></Field>
         <Field label="Supplier" className="sm:col-span-2">

@@ -17,6 +17,7 @@ import {
   type BillStaffActor,
 } from '../../integrations/billService';
 import { raiseBillIntent } from '../../services/billing.service';
+import { emit, Events } from '../../realtime/emit';
 
 /**
  * The payment dashboard, served from Sizzle and backed by the bill service.
@@ -81,6 +82,14 @@ billServiceRouter.post(
       entityId: result.intent.id,
       metadata: { utr: req.body.utr, amountRupees: result.intent.amountRupees, note: result.intent.note },
     });
+    // A named person has just read this amount out of the bank statement, so every open till, bill
+    // list and report has to stop showing it as waiting. Without the announcement the money is
+    // settled on the server and still queued on the screen.
+    emit.toRestaurant(req.auth!.restaurantId, Events.PAYMENT_SUCCEEDED, {
+      amount: result.intent.amountRupees,
+      method: 'UPI',
+      ref: result.intent.id,
+    });
     res.json(result.intent);
   }),
 );
@@ -105,6 +114,12 @@ billServiceRouter.post(
       entityId: result.intent.id,
       metadata: { reason: req.body.reason },
     });
+    // The other device's queue still holds this claim as waiting until it hears the answer.
+    emit.toRestaurant(req.auth!.restaurantId, Events.PAYMENT_FAILED, {
+      amount: result.intent.amountRupees,
+      reason: req.body.reason,
+      ref: result.intent.id,
+    });
     res.json(result.intent);
   }),
 );
@@ -116,6 +131,8 @@ billServiceRouter.post(
   validate({ params: z.object({ ref: z.string().min(1).max(64) }) }),
   asyncHandler(async (req, res) => {
     const result = await relay(() => claimBillIntent(req.params.ref, actorFor(req)));
+    // So the counter on the other tablet sees the relayed claim appear without a reload.
+    emit.toRestaurant(req.auth!.restaurantId, Events.PAYMENT_CLAIMED, { ref: result.intent.id });
     res.json(result.intent);
   }),
 );
@@ -156,6 +173,8 @@ billServiceRouter.patch(
       // The address itself never enters the audit trail — only what the service will show.
       metadata: { payeeMasked: result.settings.payeeMasked, payeeName: result.settings.payeeName },
     });
+    // Every guest's pay-now page and every bill screen show this handle, so the change has to travel.
+    emit.toRestaurant(req.auth!.restaurantId, Events.SETTINGS_UPDATED, {});
     res.json(result.settings);
   }),
 );

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { AuthResult, Restaurant, User } from '../lib/types';
 import { http } from '../lib/api';
-import { disconnectRealtime } from '../lib/socket';
+import { connectRealtime, disconnectRealtime } from '../lib/socket';
 
 interface AuthState {
   user: User | null;
@@ -31,6 +31,17 @@ function sessionOf(data: AuthResult) {
   };
 }
 
+/**
+ * A session is only live while the socket carries its token, so the socket opens wherever a token
+ * appears rather than on the sign-in screen alone. A page reloaded straight into the menu, the reports
+ * or the kitchen keeps the session in local storage, and a screen that stops listening until someone
+ * signs in again is a screen that has to be refreshed — which is what this app must never ask for.
+ */
+function live(accessToken: string | null) {
+  if (accessToken) connectRealtime(accessToken);
+  else disconnectRealtime();
+}
+
 export const useAuth = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -43,20 +54,24 @@ export const useAuth = create<AuthState>()(
       async login(identifier, password) {
         const { data } = await http.post<AuthResult>('/auth/login', { identifier, password });
         set(sessionOf(data));
+        live(get().accessToken);
       },
 
       async loginWithCode(phone, code) {
         const { data } = await http.post<AuthResult>('/auth/otp/verify', { phone, code });
         set(sessionOf(data));
+        live(get().accessToken);
       },
 
       async register(input) {
         const { data } = await http.post<AuthResult>('/auth/register', input);
         set(sessionOf(data));
+        live(get().accessToken);
       },
 
       setTokens(tokens) {
         set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
+        live(tokens.accessToken);
       },
 
       setRestaurant(restaurant) {
@@ -81,6 +96,7 @@ export const useAuth = create<AuthState>()(
         try {
           const { data } = await http.get<{ user: User; restaurant: Restaurant }>('/auth/me');
           set({ user: data.user, restaurant: data.restaurant, ready: true });
+          live(get().accessToken);
         } catch {
           set({ user: null, restaurant: null, accessToken: null, refreshToken: null, ready: true });
         }
@@ -90,7 +106,14 @@ export const useAuth = create<AuthState>()(
       name: 'sizzle.auth',
       partialize: (s) => ({ user: s.user, restaurant: s.restaurant, accessToken: s.accessToken, refreshToken: s.refreshToken }),
       onRehydrateStorage: () => (state) => {
-        if (state) state.ready = true;
+        if (state) {
+          state.ready = true;
+          // A reload restores the session from storage without visiting the sign-in screen, and this
+          // is the only moment that knows it. Without opening the socket here, a reloaded kitchen or
+          // report sits at "Offline" until somebody signs in again — which reads as a page that has to
+          // be refreshed to stay current.
+          live(state.accessToken);
+        }
       },
     },
   ),

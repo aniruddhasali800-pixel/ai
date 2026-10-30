@@ -83,6 +83,32 @@ export function invalidateMany(prefixes: string[]) {
   for (const p of prefixes) invalidate(p);
 }
 
+/**
+ * Mounted readers, keyed by the entry they render. Used only by the fallback below: a screen can ask
+ * again without its cached answer being deleted first, so refreshing costs no spinner.
+ */
+const reask = new Map<string, Set<() => void>>();
+
+/**
+ * Ask every mounted query again, keeping what is on screen until the answer lands. This is what a
+ * screen does when realtime has gone quiet — a hosted instance sleeps between customers, and a socket
+ * refused by a cold service does not always come back — so a stale figure is a slow one, not a
+ * permanent one.
+ */
+export function revalidateAll() {
+  for (const listeners of reask.values()) for (const fn of listeners) fn();
+}
+
+function watchReask(key: string, fn: () => void) {
+  const set = reask.get(key) ?? new Set<() => void>();
+  set.add(fn);
+  reask.set(key, set);
+  return () => {
+    set.delete(fn);
+    if (!set.size) reask.delete(key);
+  };
+}
+
 export interface QueryResult<T> {
   data: T | undefined;
   loading: boolean;
@@ -124,12 +150,14 @@ export function useQuery<T>(
 
   useEffect(() => {
     if (!enabled) return;
+    const stopWatching = watchReask(key, () => void run());
     // The cached payload only answers the current question when it was fetched with these params.
     const fresh =
       asked.get(key) === fingerprint &&
       values.has(key) &&
       (options?.refetchOnMount ? false : Date.now() - (stamp.get(key) ?? 0) < 20_000);
     if (!fresh) void run();
+    return stopWatching;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, key, run, gen, fingerprint]);
 

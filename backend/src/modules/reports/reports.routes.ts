@@ -12,6 +12,7 @@ import {
   readDayClose,
   writeDayClose,
 } from '../../services/dayClose.service';
+import { emit, Events } from '../../realtime/emit';
 import {
   dashboard,
   operationsReport,
@@ -150,6 +151,10 @@ reportsRouter.post(
   validate({ body: dayCloseQuery }),
   asyncHandler(async (req, res) => {
     const body = (req.body ?? {}) as DayCloseQuery;
-    res.json(await writeDayClose(req.auth!.restaurantId, body.date));
+    const report = await writeDayClose(req.auth!.restaurantId, body.date);
+    // Another device open on the same reports has no reason to poll a file that just changed, so the
+    // close announces itself; without it a manager's screen goes on showing the pre-close numbers.
+    emit.toRestaurant(req.auth!.restaurantId, Events.DAY_CLOSE_UPDATED, { date: report.date });
+    res.json(report);
   }),
 );

@@ -202,6 +202,7 @@ inventoryRouter.delete(
       { new: true },
     ).lean();
     if (!item) throw ApiError.notFound('Inventory item not found');
+    emit.toRestaurant(req.auth!.restaurantId, Events.INVENTORY_UPDATED, { itemId: String(item._id), removed: true });
     res.json({ ok: true, item });
   }),
 );
