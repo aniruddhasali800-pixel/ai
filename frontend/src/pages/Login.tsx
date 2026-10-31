@@ -1,49 +1,35 @@
-import { useState, type FormEvent } from 'react';
+import { useCallback, useState, type FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import {
-  ArrowRight,
-  ChefHat,
-  CreditCard,
-  FlaskConical,
-  ShieldCheck,
-  ConciergeBell,
-  ClipboardList,
-  MessageSquareText,
-  Store,
-} from 'lucide-react';
+import { ArrowRight, MessageSquareText, ShieldCheck, Store } from 'lucide-react';
 import { Brand } from '../layouts/AppShell';
-import { Button, Field, Input, SegmentedControl } from '../components/ui';
+import { Button, Field, Input } from '../components/ui';
 import { useAuth } from '../store/auth';
 import { connectRealtime } from '../lib/socket';
 import { errMsg, http } from '../lib/api';
-import { DEMO_MASTER, demoPassword } from '../lib/demoAccounts';
 import type { Role } from '../lib/types';
-
-const DEMO: { role: Role; label: string; email: string; icon: typeof ChefHat; blurb: string }[] = [
-  { role: 'OWNER', label: 'Owner', email: 'owner@sizzle.test', icon: ShieldCheck, blurb: 'Everything, reports, settings' },
-  { role: 'MANAGER', label: 'Manager', email: 'manager@sizzle.test', icon: ClipboardList, blurb: 'Floor, staff, orders' },
-  { role: 'WAITER', label: 'Waiter', email: 'waiter1@sizzle.test', icon: ConciergeBell, blurb: 'Mobile floor & orders' },
-  { role: 'KITCHEN', label: 'Kitchen', email: 'kitchen@sizzle.test', icon: ChefHat, blurb: 'Kitchen display' },
-  { role: 'CASHIER', label: 'Cashier', email: 'cashier@sizzle.test', icon: CreditCard, blurb: 'Bills & payments' },
-];
 
 export function LoginPage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<'password' | 'code'>('password');
-  const [identifier, setIdentifier] = useState('owner@sizzle.test');
-  const [password, setPassword] = useState(demoPassword('owner@sizzle.test'));
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [phoneDoor, setPhoneDoor] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (user) return <Navigate to={homeFor(user.role)} replace />;
-
   /** After a successful login, open the right station screen. */
-  async function finish() {
-    const u = useAuth.getState().user;
-    connectRealtime(useAuth.getState().accessToken);
-    navigate(u ? homeFor(u.role) : '/app', { replace: true });
-  }
+  const finish = useCallback(
+    async (role?: Role) => {
+      const u = role ? { role } : useAuth.getState().user;
+      connectRealtime(useAuth.getState().accessToken);
+      navigate(u ? homeFor(u.role) : '/app', { replace: true });
+    },
+    [navigate],
+  );
+
+  // Every hook runs before this exit, because a sign-in lands here with a user and React counts the
+  // hooks from one render to the next — leaving one below this return would tear the tree down.
+  if (user) return <Navigate to={homeFor(user.role)} replace />;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -51,22 +37,6 @@ export function LoginPage() {
     setError(null);
     try {
       await login(identifier.trim(), password);
-      await finish();
-    } catch (err) {
-      setError(errMsg(err, 'Could not sign in'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function quick(email: string) {
-    setMode('password');
-    setIdentifier(email);
-    setPassword(demoPassword(email));
-    setBusy(true);
-    setError(null);
-    try {
-      await login(email, demoPassword(email));
       await finish();
     } catch (err) {
       setError(errMsg(err, 'Could not sign in'));
@@ -87,41 +57,40 @@ export function LoginPage() {
             Live orders, active tables and clear bills.
           </h2>
           <p className="text-[15px] leading-relaxed text-ink-300">
-            One system for floor, counter and kitchen. Pick your role to see the exact interface built for that station.
+            One system for floor, counter and kitchen. Sign in and the account decides which station opens — owner,
+            manager, waiter, kitchen or cashier.
           </p>
         </div>
-        <p className="relative text-[12px] text-ink-500">Saffron &amp; Smoke · Pune · a Sizzle demo tenant</p>
+        <p className="relative text-[12px] text-ink-500">Sizzle · floor, counter and kitchen in one system</p>
       </div>
 
-      {/* Form panel */}
+      {/* The two doors: an existing restaurant, or a new one. */}
       <div className="flex flex-col justify-center px-6 py-12 sm:px-14">
         <div className="mx-auto w-full max-w-sm">
           <div className="lg:hidden">
             <Brand />
           </div>
-          <h1 className="mt-8 font-display text-2xl font-800 tracking-tight text-ink-900 lg:mt-0">Sign in</h1>
-          <p className="mt-1 text-sm text-ink-500">One code on the wall, five jobs behind it — your account decides the screen.</p>
 
-          <div className="mt-5">
-            <SegmentedControl
-              size="sm"
-              value={mode}
-              onChange={(v) => setMode(v as 'password' | 'code')}
-              options={[
-                { value: 'password', label: 'Email / Demo' },
-                { value: 'code', label: 'One-time code' },
-              ]}
-            />
-          </div>
+          <h1 className="mt-8 font-display text-2xl font-800 tracking-tight text-ink-900 lg:mt-0">
+            {phoneDoor ? 'Start your shift' : 'Sign in to your restaurant'}
+          </h1>
+          <p className="mt-1 text-sm leading-relaxed text-ink-500">
+            {phoneDoor
+              ? 'The number you gave on the job form, or the one your manager typed. A code is worth five minutes.'
+              : 'The email or phone number your owner registered you with, and your password.'}
+          </p>
 
-          {mode === 'password' ? (
+          {phoneDoor ? (
+            <CodeForm onDone={finish} onBack={() => setPhoneDoor(false)} />
+          ) : (
             <form onSubmit={submit} className="mt-5 space-y-4">
               <Field label="Email or phone">
                 <Input
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="you@sizzle.test"
+                  placeholder="you@restaurant.com"
                   autoComplete="username"
+                  autoFocus
                   required
                 />
               </Field>
@@ -137,57 +106,54 @@ export function LoginPage() {
               </Field>
               {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700 ring-1 ring-red-200">{error}</p>}
               <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy} icon={<ArrowRight size={16} />}>
-                Enter floor
+                Sign in
               </Button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPhoneDoor(true);
+                  setError(null);
+                }}
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-600 hover:text-ember-600 hover:underline"
+              >
+                <MessageSquareText size={15} /> No password yet — take a code sent to my phone
+              </button>
             </form>
-          ) : (
-            <CodeForm onDone={finish} />
           )}
 
-          {mode === 'password' && (
-            <>
-              <div className="my-6 flex items-center gap-3">
-                <span className="h-px flex-1 bg-ink-200" />
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-400">Demo accounts (1-tap)</span>
-                <span className="h-px flex-1 bg-ink-200" />
-              </div>
-
-              <div className="grid gap-2">
-                {DEMO.map((d) => (
-                  <button
-                    key={d.email}
-                    onClick={() => quick(d.email)}
-                    disabled={busy}
-                    className="group flex items-center gap-3 rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-left transition-all hover:border-ember-300 hover:bg-ember-50/40 disabled:opacity-60"
-                  >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-ink-900 text-white transition-colors group-hover:bg-ember-500">
-                      <d.icon size={16} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13.5px] font-semibold text-ink-900">{d.label}</span>
-                      <span className="block truncate text-[12px] text-ink-500">{d.blurb}</span>
-                    </span>
-                    <span className="shrink-0 text-[11px] font-medium text-ink-400 group-hover:text-ember-600">{d.email}</span>
-                  </button>
-                ))}
-              </div>
-
-              <p className="mt-3 text-[11.5px] leading-relaxed text-ink-400">
-                Each job was seeded with its own password — the list is in{' '}
-                <span className="font-semibold text-ink-500">DEMO-CREDENTIALS.md</span>. Tapping a tile fills it in for
-                you, or use <span className="font-semibold text-ink-500">{DEMO_MASTER}</span> to open any of them.
-              </p>
-            </>
-          )}
-
-          <div className="mt-7 flex items-center justify-between text-[13px]">
-            <Link to="/register" className="inline-flex items-center gap-1.5 font-semibold text-ember-600 hover:text-ember-700 hover:underline">
-              <Store size={15} /> Open / Register new restaurant →
-            </Link>
-            <Link to="/book/saffron-and-smoke" className="text-ink-500 hover:text-ink-800">
-              Book a table →
-            </Link>
+          <div className="my-7 flex items-center gap-3">
+            <span className="h-px flex-1 bg-ink-200" />
+            <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-400">or</span>
+            <span className="h-px flex-1 bg-ink-200" />
           </div>
+
+          <button
+            type="button"
+            onClick={() => navigate('/register')}
+            className="flex w-full items-center gap-3 rounded-xl border border-ink-200 bg-white px-4 py-3.5 text-left transition-all hover:border-ember-300 hover:bg-ember-50/40"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ember-500 text-white">
+              <Store size={18} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14.5px] font-semibold text-ink-900">Create a restaurant</span>
+              <span className="block text-[12.5px] leading-relaxed text-ink-500">
+                Name it, set its branding, and you are its owner — no sales call, no waiting.
+              </span>
+            </span>
+            <ArrowRight size={16} className="shrink-0 text-ink-400" />
+          </button>
+
+          <p className="mt-6 flex items-start gap-2 text-[11.5px] leading-relaxed text-ink-400">
+            <ShieldCheck size={13} className="mt-0.5 shrink-0" />
+            <span>
+              Every restaurant’s orders, menus and photos are its own records. Signing in opens one kitchen, not all
+              of them.{' '}
+              <Link to="/book/saffron-and-smoke" className="font-semibold text-ink-500 hover:text-ink-800 hover:underline">
+                Dining as a guest? Book a table →
+              </Link>
+            </span>
+          </p>
         </div>
       </div>
     </div>
@@ -198,12 +164,13 @@ export function LoginPage() {
  * The floor's door: a phone number and a code that is worth five minutes. A walk-in who was
  * approved on the job form has never been given a password, so this is how a shift starts.
  */
-function CodeForm({ onDone }: { onDone: () => Promise<void> | void }) {
+function CodeForm({ onDone, onBack }: { onDone: () => Promise<void> | void; onBack: () => void }) {
   const { loginWithCode } = useAuth();
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [sent, setSent] = useState(false);
   const [demoCode, setDemoCode] = useState<string | null>(null);
+  const [noGateway, setNoGateway] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,13 +178,20 @@ function CodeForm({ onDone }: { onDone: () => Promise<void> | void }) {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    setNoGateway(false);
     try {
       const { data } = await http.post<{ ok: boolean; sent: boolean; demoCode: string | null }>('/auth/otp/request', {
         phone: phone.trim(),
       });
-      setSent(data.sent);
-      setDemoCode(data.demoCode);
-      if (!data.sent) setError('We could not send a code to that number. Check the digits, or ask your manager to add you.');
+      // A server with no text gateway hands back no code, which means nothing is coming. The form
+      // stays on the number and says so, instead of opening a box for digits that never arrive.
+      if (data.sent && !data.demoCode) {
+        setNoGateway(true);
+      } else {
+        setSent(data.sent);
+        setDemoCode(data.demoCode);
+        if (!data.sent) setError('We could not send a code to that number. Check the digits, or ask your manager to add you.');
+      }
     } catch (err) {
       setError(errMsg(err, 'Could not send a code'));
     } finally {
@@ -243,13 +217,23 @@ function CodeForm({ onDone }: { onDone: () => Promise<void> | void }) {
   if (!sent) {
     return (
       <form onSubmit={request} className="mt-5 space-y-4">
-        <Field label="Your phone number" hint="The one you gave on the job form, or the one your manager typed.">
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="98765 43210" required />
+        <Field label="Your phone number">
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" autoComplete="tel" placeholder="98765 43210" autoFocus required />
         </Field>
+        {noGateway && (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 ring-1 ring-amber-200">
+            This server is not wired to a text-message provider, so no code can reach a phone. Your
+            manager can set a password on your account under Back office → Staff, and you can sign in
+            with that instead.
+          </p>
+        )}
         {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700 ring-1 ring-red-200">{error}</p>}
         <Button type="submit" variant="primary" size="lg" className="w-full" loading={busy} icon={<MessageSquareText size={16} />}>
           Send me a code
         </Button>
+        <button type="button" onClick={onBack} className="text-[13px] font-semibold text-ink-600 hover:text-ember-600 hover:underline">
+          Sign in with your password instead
+        </button>
       </form>
     );
   }
@@ -262,6 +246,7 @@ function CodeForm({ onDone }: { onDone: () => Promise<void> | void }) {
           onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
           inputMode="numeric"
           autoComplete="one-time-code"
+          autoFocus
           placeholder="000000"
           className="tracking-[0.35em] text-center font-display text-lg"
           required
@@ -281,6 +266,9 @@ function CodeForm({ onDone }: { onDone: () => Promise<void> | void }) {
           Start shift
         </Button>
       </div>
+      <button type="button" onClick={onBack} className="text-[13px] font-semibold text-ink-600 hover:text-ember-600 hover:underline">
+        Sign in with your password instead
+      </button>
     </form>
   );
 }

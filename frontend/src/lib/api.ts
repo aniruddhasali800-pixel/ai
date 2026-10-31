@@ -42,12 +42,30 @@ async function refreshAccessToken(): Promise<string> {
   }
   try {
     const { data } = await axios.post(`${baseURL}/auth/refresh`, { refreshToken });
-    setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
-    return data.accessToken as string;
+    // The server rotates one device's session slot per call, so only the pair the store is still
+    // holding may be replaced — an answer for a token somebody already swapped out would strand us.
+    if (useAuth.getState().refreshToken === refreshToken) {
+      setTokens({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+    }
+    return useAuth.getState().accessToken ?? (data.accessToken as string);
   } catch (err) {
-    logout();
+    const now = useAuth.getState();
+    // A second caller can win this race and its session is the live one, so adopt it rather than
+    // throwing the owner back to the sign-in screen with a half-typed form behind them.
+    if (now.refreshToken !== refreshToken && now.accessToken) return now.accessToken;
+    now.logout();
     throw err;
   }
+}
+
+/**
+ * One refresh in flight, whichever layer asked for it. The socket and a refused HTTP call both notice
+ * the same expired token, and two posts carrying the same refresh token leave exactly one of the two
+ * answers usable — the loser's screen ends up signed out.
+ */
+function refreshTokenOnce(): Promise<string> {
+  if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => (refreshPromise = null));
+  return refreshPromise;
 }
 
 /**
@@ -56,7 +74,7 @@ async function refreshAccessToken(): Promise<string> {
  * handshakes with. Handing the refresher over lets the socket re-authenticate itself instead of
  * going quietly silent.
  */
-onRealtimeAuthFailure(refreshAccessToken);
+onRealtimeAuthFailure(refreshTokenOnce);
 
 /** Raised when the API answers with the single-page app instead of data. */
 class ShellAnswerError extends Error {
@@ -89,8 +107,7 @@ http.interceptors.response.use(
       if (state.refreshToken) {
         original._retry = true;
         try {
-          if (!refreshPromise) refreshPromise = refreshAccessToken().finally(() => (refreshPromise = null));
-          const token = await refreshPromise;
+          const token = await refreshTokenOnce();
           original.headers.Authorization = `Bearer ${token}`;
           return http(original);
         } catch {
