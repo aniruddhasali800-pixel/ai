@@ -21,7 +21,7 @@
 
 | Data Type | Storage Engine | Local Path / Location | Description |
 | :--- | :--- | :--- | :--- |
-| **Primary Database** | MongoDB (WiredTiger Engine) | `.data/mongo/` | Stores tenants, menus, orders, tables, audit logs, and users on the local machine disk. |
+| **Primary Database** | JSON-line archive (Mongoose-shaped models over files) | `.data/archive/` | Stores tenants, menus, orders, tables, audit logs, and users as one folder per restaurant on the local machine disk. |
 | **Billing & Payments** | SQLite Database | `bill/dev.db` | High-integrity local SQLite ledger for all bill computations and UPI payment logs. |
 | **Uploaded Assets** | Local Filesystem | `uploads/` & `backend/uploads/` | Stores uploaded logos, food pictures, and cover banners on disk. |
 | **Bills & Receipts** | Local Database & Thermal Print | Stored locally | Printed directly to local ESC/POS thermal printers and saved in history. |
@@ -37,7 +37,7 @@ graph TD
     Client["Browser / Mobile / Tablet Devices"] -->|Port 5173| ViteApp["Frontend (React 19 + TailwindCSS)"]
     ViteApp -->|REST API :4000| ExpressServer["Backend API (Express + TypeScript)"]
     ViteApp <-->|WebSockets :4000| RealtimeEngine["Realtime Engine (Socket.IO)"]
-    ExpressServer -->|Embedded Persistence| LocalMongo[".data/mongo/ (WiredTiger DB)"]
+    ExpressServer -->|File-backed store| LocalArchive[".data/archive/ (JSON lines per tenant)"]
     ExpressServer -->|Local Media| LocalUploads["uploads/ (Disk Storage)"]
     ExpressServer -->|Port 3100| BillService["Bill & UPI Microservice (Next.js + SQLite)"]
     BillService -->|Prisma ORM| LocalSQLite["bill/dev.db (SQLite)"]
@@ -93,7 +93,6 @@ The frontend is built using **React 19**, **TypeScript**, **Vite**, and **Tailwi
 - [`ImagePicker.tsx`](file:///d:/New%20folder%20(2)/frontend/src/components/ImagePicker.tsx): Universal image upload component supporting disk storage, camera capture, live preview, and public upload endpoints.
 - [`Toaster.tsx`](file:///d:/New%20folder%20(2)/frontend/src/components/Toaster.tsx): Global notification toaster rendering real-time success, warning, and error alerts.
 - [`OperationsAppModal.tsx`](file:///d:/New%20folder%20(2)/frontend/src/components/OperationsAppModal.tsx): Interactive helper modal displaying station links, QR codes, and system shortcuts.
-- [`ClerkAuthBridge.tsx`](file:///d:/New%20folder%20(2)/frontend/src/components/ClerkAuthBridge.tsx): Optional authentication bridge supporting enterprise SSO.
 
 #### State & Realtime Stores (`/frontend/src/store` & `/frontend/src/hooks`)
 - [`store/auth.ts`](file:///d:/New%20folder%20(2)/frontend/src/store/auth.ts): Zustand store managing JWT tokens, active user session, restaurant metadata, login, and registration.
@@ -107,15 +106,14 @@ The frontend is built using **React 19**, **TypeScript**, **Vite**, and **Tailwi
 - [`lib/format.ts`](file:///d:/New%20folder%20(2)/frontend/src/lib/format.ts): Currency formatters (₹ INR), date-time helpers, and string transformers.
 - [`lib/downloadQr.ts`](file:///d:/New%20folder%20(2)/frontend/src/lib/downloadQr.ts): Helper for generating and downloading high-resolution PNG QR codes for tables and counters.
 - [`lib/jobs.ts`](file:///d:/New%20folder%20(2)/frontend/src/lib/jobs.ts): Role descriptions and station definitions for floor staff.
-- [`lib/demoAccounts.ts`](file:///d:/New%20folder%20(2)/frontend/src/lib/demoAccounts.ts): Seed credentials for one-click testing across roles.
 - [`lib/statusMaps.ts`](file:///d:/New%20folder%20(2)/frontend/src/lib/statusMaps.ts): UI badge color maps for orders, payments, and table states.
 - [`lib/query.ts`](file:///d:/New%20folder%20(2)/frontend/src/lib/query.ts): Lightweight asynchronous data-fetching helper.
 
 #### Pages (`/frontend/src/pages`)
 - **Public & Authentication**:
-  - [`Login.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/Login.tsx): Station login with password, phone OTP, and 1-tap demo credentials.
+  - [`Login.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/Login.tsx): Two doors only — an identifier with a password, or a phone number with a one-time code — beside the create-a-restaurant card.
   - [`Register.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/Register.tsx): 2-step onboarding wizard for new restaurant owners (branding, logo, address, owner account).
-  - [`Hub.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/Hub.tsx): Landing portal navigating to all stations, demo accounts, and guest views.
+  - [`Hub.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/Hub.tsx): Landing portal to every station, role screen and guest view.
   - [`StaffInstall.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/StaffInstall.tsx): PWA installation landing screen for restaurant floor tablets and phones.
   - [`ApplyJob.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/ApplyJob.tsx): Public job application screen scanned from restaurant recruitment QR codes.
   - [`NotFound.tsx`](file:///d:/New%20folder%20(2)/frontend/src/pages/NotFound.tsx): Clean 404 error page.
@@ -166,12 +164,12 @@ The frontend is built using **React 19**, **TypeScript**, **Vite**, and **Tailwi
 The backend is built with **Node.js**, **Express**, **TypeScript**, **Mongoose (MongoDB)**, and **Socket.IO**.
 
 #### Server Entry & Configuration (`/backend/src`)
-- [`server.ts`](file:///d:/New%20folder%20(2)/backend/src/server.ts): Main process bootstrap: connects to local MongoDB, auto-seeds demo data if empty, attaches Socket.IO, starts the background scheduler, and handles graceful shutdown.
+- [`server.ts`](file:///d:/New%20folder%20(2)/backend/src/server.ts): Main process bootstrap: loads the file archive, auto-seeds demo data if empty, attaches Socket.IO, starts the background scheduler, and handles graceful shutdown.
 - [`app.ts`](file:///d:/New%20folder%20(2)/backend/src/app.ts): Express application assembly: registers security headers (`helmet`), CORS, JSON body parsers, cookie parsers, audit logging, and routing.
 - [`routes.ts`](file:///d:/New%20folder%20(2)/backend/src/routes.ts): Master API router mounting all modular domain endpoints.
 - [`seed.ts`](file:///d:/New%20folder%20(2)/backend/src/seed.ts): Seed engine generating the complete demo restaurant (*Saffron & Smoke*), starter menu items, ingredients, tables, historical sales, and staff.
 - [`config/env.ts`](file:///d:/New%20folder%20(2)/backend/src/config/env.ts): Strongly typed environment variable validator and secret loader.
-- [`config/db.ts`](file:///d:/New%20folder%20(2)/backend/src/config/db.ts): High-reliability MongoDB connector. If no cloud URI is given, it automatically launches an embedded MongoDB server with **WiredTiger engine on local disk (`.data/mongo/`)**.
+- [`config/db.ts`](file:///d:/New%20folder%20(2)/backend/src/config/db.ts): Opens the record archive at `ARCHIVE_DIR` and reads its JSON lines into memory before the first request is served. There is no database server to reach; an unreadable folder stops the process instead of starting it with an empty restaurant.
 
 #### Middleware (`/backend/src/middleware`)
 - [`auth.ts`](file:///d:/New%20folder%20(2)/backend/src/middleware/auth.ts): JWT verification middleware extracting user ID, tenant ID, and permissions into `req.auth`.
@@ -328,12 +326,19 @@ npm run dev
 # Billing service ready on http://localhost:3100
 ```
 
+### 6.3 Putting it on a host
+
+`npm run build` in `backend/` produces the runnable API bundle and the client bundle the API serves,
+so one service hosts the whole product. [`DEPLOYMENT.md`](DEPLOYMENT.md) is the step-by-step for
+Render and for any other host: the build and start commands, every environment variable by name, what
+happens to the record archive across a deploy, and the checklist to run once it is up.
+
 ---
 
 ## 7. Deliverables & Verification Checklist
 
 - [x] **Multi-Tenant Onboarding**: New owners can register custom restaurants with logos and addresses.
 - [x] **Customer Privacy**: Guests are strictly confined to public QR routes; management dashboards are locked behind JWT authentication.
-- [x] **100% Local Persistence**: Verified WiredTiger `.data/mongo/` and SQLite `bill/dev.db` storage.
+- [x] **100% Local Persistence**: Verified the JSON-line archive under `.data/archive/` and SQLite `bill/dev.db` storage.
 - [x] **Production Type Safety**: Both backend and frontend compile with zero TypeScript errors.
 - [x] **Client Documentation**: Delivered in this comprehensive, handover-ready specification.

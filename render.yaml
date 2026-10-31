@@ -24,7 +24,13 @@ services:
         value: production
       - key: NODE_VERSION
         value: '22'
-      # No longer read by the API, which keeps its records in the archive folder. It stays here so an
-      # existing deployment's value is not deleted by a blueprint sync.
+      # The two secrets a production process refuses to boot without. `sync: false` means Render asks
+      # for their values when this Blueprint first creates the service and never overwrites them after,
+      # which is how a credential belongs in a committed file: named here, valued only on the host.
+      - key: ACCESS_TOKEN_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      # No longer read by the API, which keeps its records in the archive folder.
       - key: MONGODB_URI
         sync: false

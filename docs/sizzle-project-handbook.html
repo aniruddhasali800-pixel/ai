@@ -142,7 +142,7 @@ treated as function, not polish.</div>
     <tr><td><code>multer</code></td><td>Menu photo uploads to disk (<code>middleware/upload.ts</code>)</td></tr>
     <tr><td><code>qrcode</code></td><td>PNG data-URLs for table codes, the app code, the staff code, a bill’s pay charge</td></tr>
     <tr><td><code>dotenv</code></td><td>Loads <code>backend/.env</code> before the schema is parsed</td></tr>
-    <tr><td colspan="2"><span class="small">Dev only: <code>typescript</code>, <code>tsx</code> (dev server and seed), <code>tsup</code> (single-file bundle), <code>vitest</code> (tests), <code>mongodb-memory-server</code> (embedded database), <code>@types/*</code>. <code>@clerk/express</code> is declared but imported nowhere — see §19.</span></td></tr>
+    <tr><td colspan="2"><span class="small">Dev only: <code>typescript</code>, <code>tsx</code> (dev server and seed), <code>tsup</code> (single-file bundle), <code>vitest</code> (tests), <code>mongodb-memory-server</code> (embedded database), <code>@types/*</code>.</span></td></tr>
   </tbody>
 </table>
 <h3>Frontend — <code>frontend/package.json</code></h3>
@@ -267,7 +267,7 @@ ai/
 │   │   │                          NotificationBell, OperationsAppModal, charts, modals
 │   │   ├── hooks/                 useRealtimeShell, useInstallPrompt, useTitle
 │   │   ├── lib/                   api, socket, query, types, format, statusMaps, scan, jobs,
-│   │   │                          tracked, downloadQr, demoAccounts, installShortcuts
+│   │   │                          tracked, downloadQr, installShortcuts
 │   │   └── store/                 auth (persisted), notifications, toasts
 │   ├── public/                    manifest.webmanifest, manifest-staff.webmanifest, sw.js, icons/
 │   ├── scripts/make-icons.mjs     regenerates the PNG favicon set and maskable icons
@@ -275,7 +275,9 @@ ai/
 │   └── .env / .env.production     dev needs nothing; production leaves VITE_API_URL empty
 ├── render.yaml                    Render Blueprint: one web service, rootDir backend
 ├── README.md                      run, LAN demo from a phone, env, deploy
-├── DEMO-CREDENTIALS.md             every seeded sign-in and the master password
+├── AUTH.md                        how a tester gets a session, with no committed password
+├── DEPLOYMENT.md                  host settings, environment names, deploy and reseed steps
+├── DEMO-CREDENTIALS.md            the seeded staff, their phone numbers, the guest links
 └── .gitignore                     .env, .data, uploads, dist, and the scratch files used while testing
 </pre>
 <p>Two habits are visible in the tree and worth keeping: a feature lives in <b>one</b> folder under
@@ -542,12 +544,16 @@ that is a demo door, and it is why owner and manager are excluded.</p>
 <p>The client keeps a mirrored copy in <code>frontend/src/store/auth.ts</code> as <code>PERMISSIONS</code> plus
 <code>can(role, permission)</code>, and it is used only to decide what to render. The server checks again on
 every route; hiding a button is not a security boundary.</p>
-<h3>Demo master password</h3>
-<p><code>DEMO_MASTER_PASSWORD</code> (<code>Sizzle@Master1</code>) opens any active account — but only in the
-tenant whose slug is <code>saffron-and-smoke</code>, and only while <code>NODE_ENV</code> is not production,
-where the value arrives empty. A restaurant that onboarded itself through <code>/register</code> is a different
-tenant and the master gets nowhere near it. Suspended accounts are refused before the master is compared, and a
-failure caused by the master is indistinguishable in wording from any wrong password.</p>
+<h3>Demo credentials and the master password</h3>
+<p>The seed gives each demo staff row a name, a role and a phone number, and <em>no email and no
+password</em>, so nothing that ships inside this repository opens an account.
+<code>DEMO_STAFF_PASSWORD</code> is the opt-in that hashes a host-chosen password onto those rows;
+<code>DEMO_MASTER_PASSWORD</code> is the separate door that opens any active account of the demo tenant
+without one of its own, and it defaults to blank. Both reach only the tenant whose slug is
+<code>saffron-and-smoke</code>, and in production the master arrives empty whatever the dashboard says.
+A restaurant that onboarded itself through <code>/register</code> is a different tenant and neither
+value gets near it. Suspended accounts are refused before the master is compared, and a failure caused
+by the master is indistinguishable in wording from any wrong password.</p>
 </section>
 
 <section class="pb">
@@ -676,7 +682,7 @@ wake reads as a broken QR.</div>
     <tr><td><code>ACCESS_TOKEN_TTL</code> / <code>REFRESH_TOKEN_TTL_DAYS</code></td><td><code>15m</code> / <code>7</code></td><td>Session lifetimes</td></tr>
     <tr><td><code>CORS_ORIGIN</code></td><td>built-in list</td><td>Comma-separated origins checked by HTTP CORS <em>and</em> the socket handshake. The built-in list (<code>RENDER_EXTERNAL_URL</code>, both client hosts, localhost) is always added, so a stale dashboard value cannot lock a known client out</td></tr>
     <tr><td><code>PUBLIC_BASE_URL</code></td><td>hosted → the client domain; local → <code>http://localhost:5173</code></td><td>Host baked into table QR, guest bills, booking links and the mock checkout. A private address here is overridden with a boot warning, because no customer’s phone can open a laptop IP</td></tr>
-    <tr><td><code>DEMO_MASTER_PASSWORD</code></td><td><code>Sizzle@Master1</code></td><td>The demo door; blank switches it off, production always is</td></tr>
+    <tr><td><code>DEMO_MASTER_PASSWORD</code> / <code>DEMO_STAFF_PASSWORD</code></td><td>blank / blank</td><td>The two demo doors. The master opens any active account of the demo tenant without that account holding a password; the staff password is what the seed hashes onto the accounts it creates. Left blank, the seeded tenant has no logins at all — which is how a hosted instance should run</td></tr>
     <tr><td><code>AUTO_SEED</code></td><td>on</td><td>Set <code>false</code> to boot an untouched database clean</td></tr>
     <tr><td><code>UPLOAD_DIR</code> / <code>STATIC_DIR</code></td><td><code>uploads</code> / auto</td><td>Where photos go; where the built client is found (<code>../frontend/dist</code> by default)</td></tr>
     <tr><td><code>PAYMENT_WEBHOOK_SECRET</code>, <code>SWIGGY_/ZOMATO_/WEBSITE_WEBHOOK_SECRET</code></td><td>dev values</td><td>HMAC keys every webhook body is compared against before it is trusted</td></tr>
@@ -785,10 +791,6 @@ curl -s -D - -o /dev/null -X OPTIONS https://ai-1-hsus.onrender.com/api/auth/log
 </ul>
 <h3>Debts worth scheduling</h3>
 <ul>
-  <li><code>@clerk/express</code>, <code>@clerk/clerk-react</code> and <code>@clerk/react</code> are declared in both
-  <code>package.json</code> files and imported nowhere; the two files left behind
-  (<code>backend/src/modules/auth/clerk.webhook.ts</code>, <code>frontend/src/components/ClerkAuthBridge.tsx</code>)
-  are one-line stubs saying “no longer used”. Auth is the custom JWT scheme in §12. Remove all of it.</li>
   <li><code>onRealtimeAuthFailure()</code> is exported from <code>lib/socket.ts</code> but no module calls it, so
   the socket’s self-healing token refresh never fires — the HTTP layer’s own 401 path is what keeps sessions
   alive today. Wire it or delete it.</li>

@@ -26,16 +26,17 @@ cd frontend && npm install && npm run dev    # app on :5173
 ```
 
 Open http://localhost:5173 — that is the **hub**: every screen in the build on one page, staff and
-guest, each with the sign-in it needs. Press a card and you are inside that screen; if you are not
-signed in as someone who works there, the card signs you in as that role first.
+guest, each with the sign-in it needs. Press a card and you are inside that screen, as whoever you
+signed in as; nothing on this page hands out a login.
 
-**Database.** With `MONGODB_URI` empty the backend boots an embedded MongoDB into `backend/.data/mongo`
-on first run, so there is nothing to install. Point `MONGODB_URI` at a real server for anything
-persistent.
+**Data.** Every record is a file. The backend writes its collections as JSON lines under
+`backend/.data/archive`, one folder per restaurant — no database server to install, run, or point a
+URL at. Deleting that folder and booting again gives you a virgin install, which auto-seeds the demo
+tenant.
 
-**Seeding.** `npm run seed` rewrites the demo floor; `npm run seed:fresh` wipes and rebuilds it.
-The embedded database only allows one process to hold the lock — stop `npm run dev` before seeding,
-then start it again.
+**Seeding.** `npm run seed` rewrites the demo floor; `npm run seed:fresh` wipes and rebuilds it. Stop
+`npm run dev` in `backend/` first, so the running server is not writing records into the same folders
+the seed is replacing.
 
 ```bash
 cp backend/.env.example backend/.env   # only needed the first time
@@ -73,26 +74,37 @@ Windows already allows inbound `node.exe` on the current profile, so nothing to 
 the phone spins but never connects, check the router for AP/client isolation — that blocks
 device-to-device traffic on the Wi-Fi and no setting in this repo will fix it.
 
-## Demo accounts
+## Demo sign-in
 
-Each job was seeded with its own password. `Sizzle@Master1` opens any of them — it is a demo
-door that switches itself off when the API runs with `NODE_ENV=production`, and a host can close
-it by setting `DEMO_MASTER_PASSWORD=''`. The full sheet, including phone numbers for the
-one-time-code sign-in, is in [DEMO-CREDENTIALS.md](DEMO-CREDENTIALS.md).
+Nothing in this repository is a password. The seed builds the demo restaurant — 35 dishes, 14 tables,
+fourteen days of orders — and the seven staff who appear in that history, but it writes no email and
+no password onto them, so a fresh checkout has no login to try and a deployed copy holds nothing an
+outsider can guess at.
 
-| Role | Sign-in | Name | Password | Opens |
-| --- | --- | --- | --- | --- |
-| Owner | `owner@sizzle.test` | Aarav Mehta | `Owner@Sizzle1` | Back office, reports, settings |
-| Manager | `manager@sizzle.test` | Neha Kulkarni | `Manager@Sizzle1` | Back office without settings/integrations |
-| Cashier | `cashier@sizzle.test` | Rohit Deshmukh | `Cashier@Sizzle1` | `/pos` bills and payments |
-| Kitchen | `kitchen@sizzle.test` | Vikram Rathore | `Kitchen@Sizzle1` | `/kds` kitchen display |
-| Waiter | `waiter1@sizzle.test` | Sneha Patil | `Waiter1@Sizzle1` | `/floor` mobile floor |
-| Waiter | `waiter2@sizzle.test` | Imran Sheikh | `Waiter2@Sizzle1` | `/floor` |
-| Waiter | `waiter3@sizzle.test` | Kavya Reddy | `Waiter3@Sizzle1` | `/floor` |
+The straightforward way to get a back office is **Create a restaurant** at `/register`: it onboards a
+tenant with you as its owner, branding and all. To walk the *seeded* restaurant's own screens, name
+the password yourself in `backend/.env` and reseed:
 
-The four floor jobs (cashier, kitchen, waiter) can also sign in with their phone number and a
-one-time code instead of a password — there is no SMS gateway, so the demo echoes the code on
-screen. Owner and manager never receive one; they keep passwords.
+```
+DEMO_STAFF_PASSWORD=<a password only you know>
+```
+
+```
+cd backend && npm run seed:fresh
+```
+
+Those accounts then sign in with the phone number they were seeded with (`+91 98200 11001` is the
+owner) and that password. The floor jobs — cashier, kitchen, waiter — can take a one-time code
+instead; there is no SMS gateway, so only a machine that is not a deployed host echoes the code on
+screen, and a hosted one says that nothing can arrive. Owner and manager never receive a code, so they
+keep passwords.
+
+`DEMO_MASTER_PASSWORD` is a separate door: it opens any active account of the demo tenant without
+that account holding a password of its own. It defaults to blank, which is how it should stay
+anywhere but a machine you are demonstrating from.
+
+[DEMO-CREDENTIALS.md](DEMO-CREDENTIALS.md) lists the seeded staff, their phone numbers and every
+guest link. [AUTH.md](AUTH.md) is the short version for whoever is testing.
 
 Guest links need no login: `/t/<tableToken>` is the QR menu, `/s/<sessionToken>` is a live table,
 `/bill/<billToken>` is a receipt, `/book/saffron-and-smoke` is reservations. Table codes are listed
@@ -144,6 +156,9 @@ restaurant's own logo (Owner → Settings → *Logo*, falling back to the restau
 
 ## The five-minute tour
 
+Needs a staff account first — one you onboarded at `/register`, or the seeded floor after setting
+`DEMO_STAFF_PASSWORD` as [AUTH.md](AUTH.md) describes. Then:
+
 1. Sign in as **Kitchen** in one window and leave the board up.
 2. In another window open a table code — the hub's *Table QR menu* card has one ready, or go to
    Back office → Tables → QR for a printable code. The tokens change whenever you reseed; on the
@@ -169,15 +184,16 @@ Frontend: `npm run dev`, `npm run build`, `npm run preview`, `npm run typecheck`
 The test suites cover pricing and GST rounding, order creation and the state machine, booking
 availability and lifecycle, one combined bill per table and the cash handoff (including that a
 waiter cannot confirm a payment), the UPI link built from a bill total, and the signature checks on
-both payment and delivery webhooks. `cd backend && npm test` — 40 tests.
+both payment and delivery webhooks. `cd backend && npm test` — 129 tests across 14 files.
 
 ## Configuration
 
 Everything the backend reads lives in `backend/.env`; see `.env.example` for the annotated list.
 The important ones:
 
-- `MONGODB_URI` — empty in development to use the embedded database.
-- `AUTO_SEED` — set to `false` to boot an untouched database clean instead of loading the demo
+- `ARCHIVE_DIR` — the folder the records live in. Default `.data/archive`, relative to where the
+  server was started.
+- `AUTO_SEED` — set to `false` to boot an untouched archive clean instead of loading the demo
   tenant into it.
 - `STATIC_DIR` — only needed if the built client is not at `../frontend/dist`; when that folder
   exists the API serves the whole app itself.
@@ -205,17 +221,20 @@ codes, guest bill links and booking links is the demo client's domain rather tha
 because those are pages and the address a customer reaches for them is the one in front — set
 `PUBLIC_BASE_URL` to point them somewhere else.
 
-The database is the one real decision:
+The archive is the one real decision:
 
-- **Leave it alone** and the service runs an embedded MongoDB inside its own container. Booting an
-  empty database loads the demo tenant automatically (`AUTO_SEED`, see below), so the site is usable
-  the moment it starts — and wipes back to a fresh demo on every deploy. A Render shell cannot reach
-  that database, since the shell is a separate container, so seeding has to happen at boot.
-- **Set `MONGODB_URI`** to a free MongoDB Atlas M0 cluster and the data survives redeploys; then
-  `npm run seed` in a Render shell works too, because both containers use the same database.
-- **Set `NODE_ENV=production`** once you do have Atlas: the process then refuses to boot on a missing
-  `MONGODB_URI` or a development-default token secret, and never starts the embedded database. Pair
-  it with generated secrets (`openssl rand -hex 32`).
+- **Leave it where it falls** and the records are folders of JSON lines under `ARCHIVE_DIR`
+  (`.data/archive`) on the container's own disk. Booting an empty archive loads the demo tenant
+  automatically (`AUTO_SEED`), so the site is usable the moment it starts — and everything the
+  previous container recorded is gone after a redeploy, because the free plan recreates that folder
+  empty.
+- **Attach a persistent disk** mounted at that path if the hosted archive has to survive a deploy.
+  It is also what lets a Render shell see the same records the service is serving, since the shell is
+  a separate container.
+- **Set `NODE_ENV=production`**: the process then refuses to boot on a token secret that is still the
+  development default or this template's `change-me` value, and the demo master password answers to
+  nothing. Pair it with generated secrets (`openssl rand -hex 32`).
+- `MONGODB_URI` is not read by anything under `src/` any more — the files are the database.
 
 The free tier sleeps after inactivity, so the first request after a quiet period takes ~30 seconds;
 `/api/health` warms it. Uploaded menu images go to `backend/uploads` on that container's disk, so
@@ -238,6 +257,10 @@ variable. To move the demo to another domain, edit that list, point the rewrites
 only set `PUBLIC_BASE_URL` if the pages should open somewhere else than the first entry. Anywhere
 other than Render: serve `frontend/dist` from any static host, put that host in `CORS_ORIGIN`, and set
 `VITE_API_URL` to the API's origin if the host cannot proxy `/api` itself.
+
+The ordered version of all of this — the build to prove first, every environment variable by name with
+what each one governs, the persistent-disk decision, what a push does to the live demo, and the
+checklist to run once it answers — is [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ## What is deliberately mocked
 
