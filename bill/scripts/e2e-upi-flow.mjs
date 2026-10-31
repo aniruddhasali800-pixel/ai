@@ -13,9 +13,29 @@ const BILL = (process.env.PUBLIC_URL || 'http://localhost:3100').replace(/\/+$/,
 const SIZZLE = (process.env.SIZZLE_API_BASE_URL || 'http://localhost:4000').replace(/\/+$/, '');
 const API = `${SIZZLE}/api`;
 
-const OWNER = { email: 'owner@sizzle.test', password: 'Owner@Sizzle1' };
-const CASHIER = { email: 'cashier@sizzle.test', password: 'Cashier@Sizzle1' };
-const MANAGER = { email: 'manager@sizzle.test', password: 'Manager@Sizzle1' };
+/**
+ * Nothing in this repository is a password any more, so the three accounts this walk signs in as come
+ * from the environment, each as `email:password`:
+ *
+ *   SIZZLE_SMOKE_OWNER=…  SIZZLE_SMOKE_CASHIER=…  SIZZLE_SMOKE_MANAGER=…
+ *
+ * Any floor with those three jobs answers. A locally seeded one does after `DEMO_STAFF_PASSWORD`
+ * (AUTH.md beside the repo root says how), and a restaurant onboarded at /register can hire a cashier
+ * and a manager to its own tenant for the run.
+ */
+function accountFromEnv(name) {
+  const raw = (process.env[name] ?? '').trim();
+  const split = raw.indexOf(':');
+  if (split < 2 || split === raw.length - 1) return null;
+  return { email: raw.slice(0, split), password: raw.slice(split + 1) };
+}
+
+const OWNER = accountFromEnv('SIZZLE_SMOKE_OWNER');
+const CASHIER = accountFromEnv('SIZZLE_SMOKE_CASHIER');
+const MANAGER = accountFromEnv('SIZZLE_SMOKE_MANAGER');
+const unset = [['SIZZLE_SMOKE_OWNER', OWNER], ['SIZZLE_SMOKE_CASHIER', CASHIER], ['SIZZLE_SMOKE_MANAGER', MANAGER]]
+  .filter(([, account]) => !account)
+  .map(([name]) => name);
 
 const steps = [];
 let failed = false;
@@ -217,6 +237,11 @@ async function walk() {
 }
 
 async function main() {
+  if (unset.length) {
+    console.error(`${unset.join(', ')} — each one wants an account the floor already has, as email:password.`);
+    console.error('Nothing in this repository is a password, so this smoke will not name an account for you. AUTH.md beside the repo root says how to get a floor that answers.');
+    process.exit(1);
+  }
   try {
     await walk();
   } finally {

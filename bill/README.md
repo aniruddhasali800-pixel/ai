@@ -25,11 +25,18 @@ payment request here by itself; without them Sizzle keeps its own UPI flow and n
 
 | Role | Login | Password |
 | --- | --- | --- |
-| Admin | `admin@upi.local` | `Admin#12345` |
-| Cashier | `cashier@upi.local` | `Cashier#12345` |
+| Owner | `SEED_OWNER_EMAIL` | `SEED_OWNER_PASSWORD` |
+| Manager | `SEED_MANAGER_EMAIL` | `SEED_MANAGER_PASSWORD` |
+| Cashier | `SEED_CASHIER_EMAIL` | `SEED_CASHIER_PASSWORD` |
 
-Change these before real use (`SEED_ADMIN_PASSWORD` / `SEED_CASHIER_PASSWORD` env vars, then
-`npm run db:seed`). Only an **admin** can edit Payment Settings; a cashier can verify payments.
+No password is published for this service. `npm run setup:env` writes a generated one per role into
+the gitignored `.env`, `npm run db:seed` puts those accounts in with those passwords, and a role whose
+variable is left unset is skipped rather than created on a guess. Only an **owner** can edit Payment
+Settings; a manager reads the queue, a cashier verifies payments.
+
+The live smoke of the whole money path, `npm run test:e2e`, signs into *Sizzle's* floor rather than
+this service's, so it wants `SIZZLE_SMOKE_OWNER`, `SIZZLE_SMOKE_CASHIER` and `SIZZLE_SMOKE_MANAGER` as
+`email:password` for accounts that exist there. See `AUTH.md` in the repository root.
 
 Production: `npm run build && npm start`. Set `APP_SECRET` to a stable value — losing it makes
 the stored UPI ID and all sessions unreadable.

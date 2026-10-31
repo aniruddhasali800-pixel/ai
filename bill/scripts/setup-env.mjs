@@ -30,11 +30,11 @@ writeFileSync(
     `PUBLIC_URL=http://localhost:${port}`,
     `PORT=${port}`,
     'SEED_OWNER_EMAIL=owner@pay.local',
-    'SEED_OWNER_PASSWORD=Owner#12345',
+    `SEED_OWNER_PASSWORD=${token(9)}`,
     'SEED_MANAGER_EMAIL=manager@pay.local',
-    'SEED_MANAGER_PASSWORD=Manager#12345',
+    `SEED_MANAGER_PASSWORD=${token(9)}`,
     'SEED_CASHIER_EMAIL=cashier@pay.local',
-    'SEED_CASHIER_PASSWORD=Cashier#12345',
+    `SEED_CASHIER_PASSWORD=${token(9)}`,
     'SEED_PAYEE_VPA=demo@okhdfcbank',
     '',
   ].join('\n'),
@@ -45,4 +45,5 @@ console.log(`Wrote ${target}`);
 console.log(`\nAdd this to ${resolve(root, '..', 'backend', '.env')} so Sizzle can reach this service:\n`);
 console.log(`BILL_SERVICE_BASE_URL=http://localhost:${port}`);
 console.log(`BILL_SERVICE_SHARED_SECRET=${shared}`);
+console.log('\nThis service signs people in with the three SEED_*_EMAIL addresses, each against the password written on the line below it. Read them from that file when you seed.');
 console.log(`\n(${example.split('\n').length - 1} lines written, secrets are local only.)`);
