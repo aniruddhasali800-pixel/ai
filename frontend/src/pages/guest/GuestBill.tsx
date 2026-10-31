@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { AlertCircle, Banknote, CheckCircle2, Hourglass, Printer, Receipt } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { AlertCircle, Banknote, CheckCircle2, Hourglass, PlusCircle, Printer, Receipt, X } from 'lucide-react';
 import { invalidate, useQuery } from '../../lib/query';
 import { http, errMsg, mediaUrl } from '../../lib/api';
 import { joinSession, leaveSession, useRealtimePrefix } from '../../lib/socket';
@@ -10,11 +10,31 @@ import { MerchantMark, Spinner, VegDot } from '../../components/ui';
 import { UpiQr } from '../../components/UpiQr';
 import { toast } from '../../store/toasts';
 import { useTitle } from '../../hooks/useTitle';
+import { useAuth } from '../../store/auth';
 
 export function GuestBill() {
   const { billToken = '' } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { data, loading, error } = useQuery<PublicBill>(`guest:bill:${billToken}`, `/public/bill/${billToken}`);
   useTitle(data ? `Bill ${data.billNumber}` : 'Your bill');
+
+  const handleClose = () => {
+    window.close();
+    setTimeout(() => {
+      if (user?.role === 'WAITER') {
+        navigate('/floor');
+      } else if (user?.role === 'CASHIER') {
+        navigate('/pos');
+      } else if (user?.role === 'OWNER' || user?.role === 'MANAGER') {
+        navigate('/app');
+      } else if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/');
+      }
+    }, 100);
+  };
 
   // The counter settles this bill on a different screen — the guest should watch it
   // happen instead of refreshing and half-expecting to be charged twice.
@@ -34,6 +54,12 @@ export function GuestBill() {
         <Receipt size={24} className="mx-auto mb-3 text-ink-300" />
         <p className="font-display text-lg font-700 text-ink-900">Bill unavailable</p>
         <p className="mt-1.5 text-sm text-ink-500">{error}</p>
+        <button
+          onClick={handleClose}
+          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-ink-700 hover:bg-ink-50"
+        >
+          <X size={14} /> Close
+        </button>
       </div>
     );
   }
@@ -44,7 +70,15 @@ export function GuestBill() {
   return (
     <div className="min-h-screen bg-ink-100 px-4 py-6">
       <div className="mx-auto max-w-md overflow-hidden rounded-2xl bg-white shadow-lg ring-1 ring-ink-200">
-        <header className="border-b border-dashed border-ink-200 px-5 py-4 text-center">
+        <header className="relative border-b border-dashed border-ink-200 px-5 py-4 text-center">
+          <button
+            onClick={handleClose}
+            className="absolute right-3.5 top-3.5 grid h-8 w-8 place-items-center rounded-full text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700"
+            title="Close bill"
+            aria-label="Close bill"
+          >
+            <X size={18} />
+          </button>
           <div className="flex items-center justify-center gap-2.5">
             <MerchantMark
               name={b.merchant?.name ?? b.tableNumber ?? 'Sizzle'}
@@ -93,11 +127,29 @@ export function GuestBill() {
 
         <footer className="px-5 pb-5">
           {paid ? (
-            <div className="flex items-center gap-2.5 rounded-xl bg-leaf-50 px-4 py-3 text-leaf-800 ring-1 ring-leaf-500/30">
-              <CheckCircle2 size={19} className="shrink-0" />
-              <div className="leading-tight">
-                <p className="text-[13.5px] font-bold">Paid — thank you</p>
-                <p className="text-[12px] text-leaf-700">{b.paidAt ? dateTime(b.paidAt) : ''}</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2.5 rounded-xl bg-leaf-50 px-4 py-3 text-leaf-800 ring-1 ring-leaf-500/30">
+                <CheckCircle2 size={19} className="shrink-0" />
+                <div className="leading-tight">
+                  <p className="text-[13.5px] font-bold">Paid — thank you</p>
+                  <p className="text-[12px] text-leaf-700">{b.paidAt ? dateTime(b.paidAt) : ''}</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-1">
+                <button
+                  onClick={handleClose}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink-900 py-2.5 text-[13.5px] font-bold text-white shadow-sm transition-all hover:bg-ink-800 active:scale-[0.99]"
+                >
+                  <CheckCircle2 size={16} /> Close bill
+                </button>
+
+                <button
+                  onClick={() => navigate(user?.role === 'WAITER' ? '/floor/order' : '/floor')}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-ember-500 py-2.5 text-[13.5px] font-bold text-white shadow-sm shadow-ember-500/25 transition-all hover:bg-ember-600 active:scale-[0.99]"
+                >
+                  <PlusCircle size={15} /> Take new order
+                </button>
               </div>
             </div>
           ) : b.pay ? (
