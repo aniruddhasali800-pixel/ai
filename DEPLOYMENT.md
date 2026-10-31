@@ -133,6 +133,12 @@ archive and reseedes. Since `DEMO_STAFF_PASSWORD` is unset there, the reseeded f
 onboarding a restaurant at `/register`, not by signing into the demo one. The old Vercel origin stays
 in the allowlist, so stickers printed before the domain swap keep opening.
 
+One thing to fix on that service by hand: its `/api/health` answers `"env": "development"`, so its
+dashboard never set `NODE_ENV`. The token secrets there are already real — a session signed with the
+development default this repository publishes is refused — which is the only reason leaving it is
+tolerable. Set `NODE_ENV=production` when convenient and what is left of the development behavior goes
+with it: request logging, error detail, and the demo master password on any host that had named one.
+
 ## 7. After it starts
 
 ```bash
