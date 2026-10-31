@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { decryptSecret, encryptSecret, hashPassword, maskVpa, safeEqual, verifyPassword } from '../src/lib/crypto';
 
 test('the payee address round-trips and is never plain text in storage', () => {
-  const vpa = 'aniruddhasali473@oksbi';
+  // A made-up handle: this file is in the repo, and a real payee address belongs only in the
+  // encrypted column of a running database.
+  const vpa = 'example-cafe@okhdfcbank';
   const token = encryptSecret(vpa);
   assert.notEqual(token.includes(vpa), true);
   assert.equal(decryptSecret(token), vpa);
@@ -25,11 +27,13 @@ test('the mask is recognisable to staff and useless to a stranger', () => {
 });
 
 test('passwords verify, and only the right one does', () => {
-  const hash = hashPassword('Owner#12345');
+  // No credential anyone could sign in with, in a file that ships.
+  const password = 'a-password-only-this-test-knows';
+  const hash = hashPassword(password);
   assert.equal(hash.startsWith('scrypt$'), true);
-  assert.equal(verifyPassword('Owner#12345', hash), true);
-  assert.equal(verifyPassword('owner#12345', hash), false);
-  assert.equal(verifyPassword('Owner#1234', hash), false);
+  assert.equal(verifyPassword(password, hash), true);
+  assert.equal(verifyPassword(password.replace('a-', 'A-'), hash), false);
+  assert.equal(verifyPassword(`${password}.`, hash), false);
 });
 
 test('two hashes of the same password differ, and junk hashes are refused', () => {

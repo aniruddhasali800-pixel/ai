@@ -7,46 +7,45 @@ import { savePayee, getRawSettings, payeeHealth } from '../src/lib/settings';
  * Staff logins and, once, the demo payee. A reseed never overwrites a payee the owner has
  * since configured — that would silently repoint real customer payments.
  *
- * No password is written into this file. A new account gets the one the operator names in the
- * environment beside its email, and an account with no password named for it is skipped with a line
- * saying which variable to set. An account that already exists keeps the hash it has, because reseeding
- * must not silently reset a login somebody is using.
+ * Nothing in this file names an account, address or password. A new login needs both halves of its
+ * pair from the environment the operator set up, and a role whose pair is incomplete is skipped with
+ * a line saying which variables to set. An account that already exists keeps the hash it has, because
+ * reseeding must not silently reset a login somebody is using.
  */
-async function upsertUser(email: string, name: string, role: string, password: string | undefined, secretName: string) {
+async function upsertUser(
+  role: 'OWNER' | 'MANAGER' | 'CASHIER',
+  name: string,
+  email: string | undefined,
+  password: string | undefined,
+) {
+  if (!email || !password) {
+    console.log(
+      `No ${name.toLowerCase()} account created — this seed names no login of its own, so set SEED_${role}_EMAIL and SEED_${role}_PASSWORD in .env, then run this again.`,
+    );
+    return null;
+  }
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
     await db.user.update({ where: { id: existing.id }, data: { role, name } });
     return existing.id;
-  }
-  if (!password) {
-    console.log(`No ${role.toLowerCase()} account created — set ${secretName} in .env, then run this again.`);
-    return null;
   }
   const user = await db.user.create({ data: { email, name, role, passwordHash: hashPassword(password) } });
   return user.id;
 }
 
 async function main() {
-  const ownerId = await upsertUser(
-    process.env.SEED_OWNER_EMAIL ?? 'owner@pay.local',
-    'Owner',
-    'OWNER',
-    process.env.SEED_OWNER_PASSWORD,
-    'SEED_OWNER_PASSWORD',
-  );
+  const ownerId = await upsertUser('OWNER', 'Owner', process.env.SEED_OWNER_EMAIL, process.env.SEED_OWNER_PASSWORD);
   const managerId = await upsertUser(
-    process.env.SEED_MANAGER_EMAIL ?? 'manager@pay.local',
-    'Manager',
     'MANAGER',
+    'Manager',
+    process.env.SEED_MANAGER_EMAIL,
     process.env.SEED_MANAGER_PASSWORD,
-    'SEED_MANAGER_PASSWORD',
   );
   const cashierId = await upsertUser(
-    process.env.SEED_CASHIER_EMAIL ?? 'cashier@pay.local',
-    'Cashier',
     'CASHIER',
+    'Cashier',
+    process.env.SEED_CASHIER_EMAIL,
     process.env.SEED_CASHIER_PASSWORD,
-    'SEED_CASHIER_PASSWORD',
   );
   const logins = [ownerId, managerId, cashierId].filter(Boolean).length;
 
