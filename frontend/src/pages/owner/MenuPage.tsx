@@ -188,28 +188,67 @@ function ProductModal({ product, categories, addons, onClose }: { product: Produ
     name: p?.name ?? '',
     categoryId: p?.categoryId ?? categories[0]?._id ?? '',
     description: p?.description ?? '',
-    price: p?.price ?? 0,
+    price: p?.price == null ? '' : String(p.price),
     imageUrl: p?.imageUrl ?? '',
     isVeg: p?.isVeg ?? true,
     station: (p?.station ?? 'MAIN') as Station,
-    prepMinutes: p?.prepMinutes ?? 15,
+    prepMinutes: String(p?.prepMinutes ?? 15),
     taxPercent: p?.taxPercent ?? null,
     tags: (p?.tags ?? []).join(', '),
     addonIds: p?.addonIds ?? [],
   });
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof form, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
+  const [errors, setErrors] = useState<string[]>([]);
+  const set = (k: keyof typeof form, v: unknown) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    setErrors([]);
+  };
+
+  /**
+   * Checked here because a rejected request would otherwise arrive as "Some fields are invalid" and the
+   * owner would have no idea which box to fix.
+   */
+  function problems(): string[] {
+    const price = Number(form.price);
+    const prep = Number(form.prepMinutes);
+    const tags = form.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    const out: string[] = [];
+    if (form.name.trim().length < 2) out.push('Give the item a name of at least two letters.');
+    if (!form.categoryId) out.push('This kitchen has no category to file the item under — add one on the Categories tab first.');
+    if (form.price.trim() === '' || Number.isNaN(price) || price < 0) out.push('Add a price, or 0 if the item is free.');
+    if (form.prepMinutes.trim() !== '' && (!Number.isInteger(prep) || prep < 1 || prep > 180)) {
+      out.push('Prep time is a whole number of minutes between 1 and 180.');
+    }
+    if (form.taxPercent !== null && Number.isNaN(Number(form.taxPercent))) out.push('GST is a number between 0 and 28, or blank for the restaurant default.');
+    if (form.taxPercent != null && (Number(form.taxPercent) < 0 || Number(form.taxPercent) > 28)) out.push('GST is between 0 and 28 percent.');
+    if (tags.length > 12) out.push('Twelve tags is the most one item can carry.');
+    if (tags.some((t) => t.length > 24)) out.push('Keep every tag to 24 characters or fewer.');
+    return out;
+  }
 
   async function save() {
+    const blocking = problems();
+    if (blocking.length) {
+      setErrors(blocking);
+      return;
+    }
     setBusy(true);
     try {
-      const body = { ...form, price: Number(form.price), prepMinutes: Number(form.prepMinutes), tags: form.tags ? form.tags.split(',').map((t) => t.trim()).filter(Boolean) : [] };
+      const body = {
+        ...form,
+        name: form.name.trim(),
+        price: Number(form.price),
+        // A cleared prep field asks for the default rather than zero minutes, which the kitchen rejects.
+        prepMinutes: form.prepMinutes.trim() === '' ? undefined : Number(form.prepMinutes),
+        tags: form.tags.split(',').map((t) => t.trim()).filter(Boolean),
+      };
       if (isNew) await http.post('/menu/products', body);
       else await http.patch(`/menu/products/${(p as Product)._id}`, body);
       toast(isNew ? 'Item added' : 'Item updated', 'success');
       invalidate('menu');
       onClose();
     } catch (e) {
+      setErrors([errMsg(e, 'Could not save item')]);
       toast(errMsg(e, 'Could not save item'), 'error');
     } finally {
       setBusy(false);
@@ -219,11 +258,20 @@ function ProductModal({ product, categories, addons, onClose }: { product: Produ
   return (
     <Modal open onClose={onClose} title={isNew ? 'New menu item' : 'Edit item'} width="max-w-2xl" footer={<><Button variant="ghost" onClick={onClose}>Cancel</Button><Button variant="primary" loading={busy} onClick={save}>Save item</Button></>}>
       <div className="grid gap-3.5 sm:grid-cols-2">
-        <Field label="Name" required className="sm:col-span-2"><Input value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
+        {errors.length > 0 && (
+          <div className="sm:col-span-2 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700 ring-1 ring-red-200">
+            <ul className="list-disc space-y-0.5 pl-4">
+              {errors.map((message) => (
+                <li key={message}>{message}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <Field label="Name" required className="sm:col-span-2"><Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Butter chicken" /></Field>
         <Field label="Category"><Select value={form.categoryId} onChange={(e) => set('categoryId', e.target.value)}>{categories.map((c) => <option key={c._id} value={c._id}>{c.name}</option>)}</Select></Field>
-        <Field label="Price (₹)" required><Input type="number" min={0} value={form.price} onChange={(e) => set('price', e.target.value)} /></Field>
+        <Field label="Price (₹)" required><Input type="number" min={0} value={form.price} onChange={(e) => set('price', e.target.value)} placeholder="e.g. 260" /></Field>
         <Field label="Station"><Select value={form.station} onChange={(e) => set('station', e.target.value)}>{STATION_LIST.map((s) => <option key={s} value={s}>{stationLabel(s)}</option>)}</Select></Field>
-        <Field label="Prep time (min)"><Input type="number" min={1} max={180} value={form.prepMinutes} onChange={(e) => set('prepMinutes', e.target.value)} /></Field>
+        <Field label="Prep time (min)" hint="Blank means the kitchen default of 15 minutes."><Input type="number" min={1} max={180} value={form.prepMinutes} onChange={(e) => set('prepMinutes', e.target.value)} /></Field>
         <Field label="GST % (blank = default)"><Input type="number" min={0} max={28} value={form.taxPercent ?? ''} onChange={(e) => set('taxPercent', e.target.value === '' ? null : Number(e.target.value))} /></Field>
         <ImagePicker label="Dish photo" value={form.imageUrl} onChange={(v) => set('imageUrl', v)} className="sm:col-span-2" />
         <Field label="Description" className="sm:col-span-2"><Textarea value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
