@@ -62,7 +62,19 @@ export function createApp() {
 
   const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR);
   fs.mkdirSync(uploadDir, { recursive: true });
-  app.use('/uploads', express.static(uploadDir, { maxAge: '7d', immutable: true }));
+  app.use(
+    '/uploads',
+    express.static(uploadDir, {
+      maxAge: '7d',
+      immutable: true,
+      // The mime table bundled into `send` predates HEIC, so an iPhone photo would be served as
+      // application/octet-stream and a browser reading it as a picture would not be told it is one.
+      setHeaders: (res, filePath) => {
+        const ext = path.extname(filePath).toLowerCase();
+        if (ext === '.heic' || ext === '.heif') res.setHeader('Content-Type', ext === '.heic' ? 'image/heic' : 'image/heif');
+      },
+    }),
+  );
 
   app.use('/api', apiRouter);
 
