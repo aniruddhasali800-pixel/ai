@@ -8,6 +8,10 @@ process.env.SWIGGY_WEBHOOK_SECRET = 'test-swiggy-webhook-secret';
 process.env.ZOMATO_WEBHOOK_SECRET = 'test-zomato-webhook-secret';
 process.env.WEBSITE_WEBHOOK_SECRET = 'test-website-webhook-secret';
 process.env.RAZORPAY_WEBHOOK_SECRET = 'test-razorpay-webhook-secret';
+// The suite proves what the demo master door does, so it turns the door on with a value only the
+// tests know. The shipped default is blank, and dotenv would refill a deleted key from the
+// developer's own .env, so this is a test value rather than an unset one.
+process.env.DEMO_MASTER_PASSWORD = 'a-master-password-only-tests-know';
 // The bill service pairing. The base URL is blanked for the whole suite — a developer's real
 // .env points at a live service, and tests must not reach it: the default posture is "nothing
 // paired", which is what a fresh checkout runs as. The bill-service test sets it per case.

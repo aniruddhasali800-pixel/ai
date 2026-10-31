@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { LoginCodeModel, RestaurantModel, UserModel } from '../../models';
 import { findUserByTypedPhone } from '../../models/phoneMatch';
-import { env } from '../../config/env';
+import { env, isDeployedHost } from '../../config/env';
 import { ApiError } from '../../utils/httpError';
 import { phoneDigits } from '../../utils/phone';
 import { FLOOR_ROLES } from '../../types/constants';
@@ -87,16 +87,18 @@ export async function verifyCode(rawPhone: string, code: string) {
 
 /**
  * No SMS gateway is wired into this build, the same way no bank sits behind the payment mock.
- * Outside production the code is logged and handed back for the screen to show, which is the
- * only way the flow can be walked through at all; a production API stays silent rather than
- * pretending a text was sent. Set an SMS provider and this function is the one line to change.
+ * On a laptop with nothing beside it the code is logged and handed back for the screen to show, which
+ * is the only way the flow can be walked through at all. A deployed host stays silent rather than
+ * pretending a text was sent, because a code returned in an HTTP response is a key anybody who can
+ * reach that address can ask for — and that includes a host left running with `NODE_ENV=development`.
+ * Set an SMS provider and this function is the one line to change.
  */
 function deliver(
   name: string | null | undefined,
   phone: string | null | undefined,
   code: string,
 ): string | null {
-  if (env.isProd) {
+  if (env.isProd || isDeployedHost) {
     console.warn(`[sms] no gateway configured — the code for ${name ?? phone} was not sent to anyone`);
     return null;
   }

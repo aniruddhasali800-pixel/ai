@@ -41,21 +41,13 @@ import { dateKey, randomToken } from './utils/tokens';
 import type { InventoryUnit, OrderSource, OrderStatus, Station } from './types/constants';
 
 /**
- * One password per job, so signing in as the cashier really is the cashier and a demo of the
- * approve queue cannot be staged from an account that already holds the till. They are printed
- * on the login screen and live in DEMO-CREDENTIALS.md — this is a tenant with no real guests,
- * no real money and no real kitchen behind it. The master password that opens all of them is
- * the config default, not a value seeded here.
+ * The demo people below hold jobs at a fake restaurant in Koregaon Park, and the order history they
+ * are given attributes tickets to their names, so they are seeded whether or not anyone can sign in
+ * as them. What they are *not* seeded with is a password from this file: a credential committed here
+ * is a credential published, on every host that runs this code. `DEMO_STAFF_PASSWORD` names the
+ * password the whole tenant gets, and without it these accounts carry no hash at all, so the sign-in
+ * form has nothing to compare against and the only way into a back office is to onboard a restaurant.
  */
-const PASSWORDS: Record<string, string> = {
-  OWNER: 'Owner@Sizzle1',
-  MANAGER: 'Manager@Sizzle1',
-  CASHIER: 'Cashier@Sizzle1',
-  KITCHEN: 'Kitchen@Sizzle1',
-  WAITER1: 'Waiter1@Sizzle1',
-  WAITER2: 'Waiter2@Sizzle1',
-  WAITER3: 'Waiter3@Sizzle1',
-};
 
 let seedState = 20260927;
 function rnd(): number {
@@ -170,21 +162,23 @@ export async function seedDemoData(fresh = false): Promise<void> {
   const rid = String(restaurant._id);
 
   // ── Staff ─────────────────────────────────────────────────────────────────
+  // These are the fake floor and fake counter the demo history is written by. They carry a phone
+  // and no email on purpose: a job account with no email cannot be signed into by guessing a name
+  // at a domain, and the floor already signs in by phone through the code door.
   const staffSpec: {
     role: 'OWNER' | 'MANAGER' | 'CASHIER' | 'KITCHEN' | 'WAITER';
     name: string;
-    email: string;
     phone: string;
-    key: keyof typeof PASSWORDS;
   }[] = [
-    { role: 'OWNER', name: 'Aarav Mehta', email: 'owner@sizzle.test', phone: '+91 98200 11001', key: 'OWNER' },
-    { role: 'MANAGER', name: 'Neha Kulkarni', email: 'manager@sizzle.test', phone: '+91 98200 11002', key: 'MANAGER' },
-    { role: 'CASHIER', name: 'Rohit Deshmukh', email: 'cashier@sizzle.test', phone: '+91 98200 11003', key: 'CASHIER' },
-    { role: 'KITCHEN', name: 'Vikram Rathore', email: 'kitchen@sizzle.test', phone: '+91 98200 11004', key: 'KITCHEN' },
-    { role: 'WAITER', name: 'Sneha Patil', email: 'waiter1@sizzle.test', phone: '+91 98200 11005', key: 'WAITER1' },
-    { role: 'WAITER', name: 'Imran Sheikh', email: 'waiter2@sizzle.test', phone: '+91 98200 11006', key: 'WAITER2' },
-    { role: 'WAITER', name: 'Kavya Reddy', email: 'waiter3@sizzle.test', phone: '+91 98200 11007', key: 'WAITER3' },
+    { role: 'OWNER', name: 'Aarav Mehta', phone: '+91 98200 11001' },
+    { role: 'MANAGER', name: 'Neha Kulkarni', phone: '+91 98200 11002' },
+    { role: 'CASHIER', name: 'Rohit Deshmukh', phone: '+91 98200 11003' },
+    { role: 'KITCHEN', name: 'Vikram Rathore', phone: '+91 98200 11004' },
+    { role: 'WAITER', name: 'Sneha Patil', phone: '+91 98200 11005' },
+    { role: 'WAITER', name: 'Imran Sheikh', phone: '+91 98200 11006' },
+    { role: 'WAITER', name: 'Kavya Reddy', phone: '+91 98200 11007' },
   ];
+  const staffPassword = env.DEMO_STAFF_PASSWORD;
   const staff = await UserModel.insertMany(
     await Promise.all(
       staffSpec.map(async (s) => ({
@@ -192,9 +186,10 @@ export async function seedDemoData(fresh = false): Promise<void> {
         restaurantId: restaurant._id,
         role: s.role,
         name: s.name,
-        email: s.email,
         phone: s.phone,
-        passwordHash: await hashPassword(PASSWORDS[s.key]),
+        // Absent, not blank: a document with no hash has no password to compare, which is what
+        // "this host never asked for a demo login" looks like in the sign-in path.
+        passwordHash: staffPassword ? await hashPassword(staffPassword) : undefined,
       })),
     ),
   );
@@ -891,8 +886,14 @@ export async function seedDemoData(fresh = false): Promise<void> {
   console.log(`
   Sizzle demo data ready — Saffron & Smoke (${rid})
 
-  Staff logins — one password per job, or ${DEMO_MASTER_PASSWORD || 'no master on this host'} for any of them
-${staffSpec.map((s) => `    ${s.email.padEnd(22)} ${s.name.padEnd(14)} ${s.role.padEnd(8)} ${PASSWORDS[s.key]}`).join('\n')}
+  Sign in: ${staffPassword
+    ? `with a phone number below and the DEMO_STAFF_PASSWORD this host set`
+    : 'not possible — DEMO_STAFF_PASSWORD is unset, so these accounts hold no password. Onboard a restaurant at /register to get a back office.'}
+${staffSpec.map((s) => `    ${s.phone.padEnd(16)} ${s.name.padEnd(14)} ${s.role}`).join('\n')}${
+    staffPassword && DEMO_MASTER_PASSWORD
+      ? `\n  A master password is also set on this host: any active account of ${DEMO_TENANT_SLUG} answers to it.`
+      : ''
+  }
 
   Floor right now: ${liveTables.map((t) => `${t.number}:${t.status}`).join('  ')}
   Menu: ${products.length} dishes · ${categories.length} categories

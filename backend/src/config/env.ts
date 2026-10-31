@@ -82,9 +82,18 @@ const schema = z.object({
   BILL_SERVICE_KEY: z.string().trim().default('sizzle-pay'),
   UPLOAD_DIR: z.string().default('uploads'),
   STATIC_DIR: z.string().trim().optional(),
-  // One password that opens any staff account, so this demo can be walked screen by screen
-  // without a list kept beside the keyboard. Set it to an empty string to switch the door off.
-  DEMO_MASTER_PASSWORD: z.string().default('Sizzle@Master1'),
+  // One password that opens any staff account of the demo tenant, so a walk-through needs a list
+  // of one rather than seven. It ships switched off: a host that wants it has to name the password
+  // itself, because a value baked into the repository is a public door on every deployment of it.
+  DEMO_MASTER_PASSWORD: z.string().default(''),
+  /**
+   * The password every seeded staff account gets, so a demo tenant can be signed into. Left unset,
+   * the seed still writes the restaurant, its menu, its tables and its order history, but hands out
+   * no logins at all — those accounts then have no hash to compare, and only the master above could
+   * open them, which is itself off. A restaurant that onboarded itself is a different tenant and is
+   * never touched by either value.
+   */
+  DEMO_STAFF_PASSWORD: z.string().default(''),
   // A virgin database gets the demo tenant loaded into it, which is the only way a
   // hosted instance has anything to show. Set AUTO_SEED=false for a clean install.
   AUTO_SEED: z
@@ -100,13 +109,18 @@ if (!parsed.success) {
 }
 
 if (parsed.data.NODE_ENV === 'production') {
+  // The development defaults, the values the committed template ships with, and anything obviously
+  // written to be replaced. A production process must not start on a secret somebody could copy out
+  // of this repository, which is the one way a token secret fails silently: everything works, and
+  // anyone who can guess the string can mint a session.
   const placeholderSecrets = ['dev-access-secret-0000000000', 'dev-refresh-secret-0000000000'];
+  const looksUnset = (value: string) => placeholderSecrets.includes(value) || value.startsWith('change-me');
   const problems: string[] = [];
-  if (placeholderSecrets.includes(parsed.data.ACCESS_TOKEN_SECRET ?? '')) {
-    problems.push('ACCESS_TOKEN_SECRET is still the development default');
+  if (looksUnset(parsed.data.ACCESS_TOKEN_SECRET ?? '')) {
+    problems.push('ACCESS_TOKEN_SECRET is still a template value');
   }
-  if (placeholderSecrets.includes(parsed.data.REFRESH_TOKEN_SECRET ?? '')) {
-    problems.push('REFRESH_TOKEN_SECRET is still the development default');
+  if (looksUnset(parsed.data.REFRESH_TOKEN_SECRET ?? '')) {
+    problems.push('REFRESH_TOKEN_SECRET is still a template value');
   }
   if (problems.length) {
     console.error(
@@ -122,6 +136,14 @@ export const env = {
   isProd: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
 };
+
+/**
+ * Whether this process is answering strangers on the public internet. A host that hands a service
+ * its own address has put it in front of customers, so anything the build only does to let a
+ * walk-through happen on a laptop has to switch itself off here — a forgotten `NODE_ENV` must not be
+ * able to turn a developer convenience into a published hole.
+ */
+export const isDeployedHost = Boolean(hosted);
 
 /** The tenant `npm run seed` loads, and the only one the demo master password opens. */
 export const DEMO_TENANT_SLUG = 'saffron-and-smoke';

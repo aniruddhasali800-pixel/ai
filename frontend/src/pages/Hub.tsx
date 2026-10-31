@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -26,20 +25,16 @@ import {
 } from 'lucide-react';
 import { Brand } from '../layouts/AppShell';
 import { Button, LinkButton, Pill } from '../components/ui';
-import { invalidate, useQuery } from '../lib/query';
-import { errMsg } from '../lib/api';
+import { useQuery } from '../lib/query';
 import { can, useAuth } from '../store/auth';
 import { useRealtimeConnected } from '../lib/socket';
-import { toast } from '../store/toasts';
 import { homeFor } from './Login';
-import { DEMO_MASTER, demoPassword } from '../lib/demoAccounts';
 import { inr } from '../lib/format';
 import type { Bill, Paginated, Role, Table } from '../lib/types';
 
 interface Screen {
   path: string;
   title: string;
-  email: string;
   role: Role;
   icon: typeof ChefHat;
   blurb: string;
@@ -50,7 +45,6 @@ const STAFF_SCREENS: Screen[] = [
   {
     path: '/kds',
     title: 'Kitchen display',
-    email: 'kitchen@sizzle.test',
     role: 'KITCHEN',
     icon: ChefHat,
     blurb: 'The pass. Tickets land here the second a guest or waiter sends them.',
@@ -59,7 +53,6 @@ const STAFF_SCREENS: Screen[] = [
   {
     path: '/floor',
     title: 'Waiter floor',
-    email: 'waiter1@sizzle.test',
     role: 'WAITER',
     icon: ConciergeBell,
     blurb: 'Your tables, your calls, running totals — built for one hand and a phone.',
@@ -68,7 +61,6 @@ const STAFF_SCREENS: Screen[] = [
   {
     path: '/pos',
     title: 'Counter and bills',
-    email: 'cashier@sizzle.test',
     role: 'CASHIER',
     icon: CreditCard,
     blurb: 'Where the money is collected: GST bills, cash drawer, card and UPI.',
@@ -77,7 +69,6 @@ const STAFF_SCREENS: Screen[] = [
   {
     path: '/app',
     title: 'Owner back office',
-    email: 'owner@sizzle.test',
     role: 'OWNER',
     icon: ShieldCheck,
     blurb: 'The whole restaurant on one screen, then the drills underneath it.',
@@ -95,8 +86,7 @@ function canOpen(path: string, role?: Role | null): boolean {
 
 export function Hub() {
   const navigate = useNavigate();
-  const { user, restaurant, login, logout } = useAuth();
-  const [busyEmail, setBusyEmail] = useState<string | null>(null);
+  const { user, restaurant, logout } = useAuth();
 
   const { data: tablesData } = useQuery<{ data: Table[] }>('hub:tables', '/tables', undefined, {
     enabled: can(user?.role, 'tables:read'),
@@ -111,21 +101,11 @@ export function Hub() {
   const unpaid = billsData?.data ?? [];
   const slug = restaurant?.slug ?? 'saffron-and-smoke';
 
-  async function enter(screen: Screen) {
-    if (user?.role === screen.role) {
-      navigate(screen.path);
-      return;
-    }
-    setBusyEmail(screen.email);
-    try {
-      await login(screen.email, demoPassword(screen.email));
-      // Different identity, different world — drop everything cached under the old session.
-      invalidate();
-      navigate(screen.path);
-    } catch (e) {
-      toast(errMsg(e, 'Could not sign that role in'), 'error');
-      setBusyEmail(null);
-    }
+  /** A card opens its screen for whoever is already signed in. This page used to sign a named demo
+   * person in with a password carried inside the bundle, which put that password on every machine
+   * that loaded the hub; an account here starts with a password somebody typed. */
+  function enter(screen: Screen) {
+    navigate(user ? screen.path : '/login');
   }
 
   return (
@@ -209,24 +189,20 @@ export function Hub() {
                 </ul>
 
                 <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-ink-100 px-4 py-3">
-                  <Button
-                    size="sm"
-                    variant={mine ? 'primary' : 'dark'}
-                    loading={busyEmail === screen.email}
-                    disabled={Boolean(busyEmail) && busyEmail !== screen.email}
-                    icon={mine ? <ArrowRight size={14} /> : <ShieldCheck size={14} />}
-                    onClick={() => void enter(screen)}
-                  >
-                    {mine ? `Open ${screen.title.toLowerCase()}` : `Enter as ${screen.role.toLowerCase()}`}
-                  </Button>
-                  {!mine && open && user && (
-                    <LinkButton to={screen.path} size="sm" variant="ghost">
-                      stay as {user.role.toLowerCase()}
-                    </LinkButton>
+                  {open || !user ? (
+                    <Button
+                      size="sm"
+                      variant={mine ? 'primary' : 'dark'}
+                      icon={<ArrowRight size={14} />}
+                      onClick={() => enter(screen)}
+                    >
+                      {user ? `Open ${screen.title.toLowerCase()}` : 'Sign in to open'}
+                    </Button>
+                  ) : (
+                    <span className="text-[12px] text-ink-400">
+                      A {user.role.toLowerCase()} account does not open this screen — it belongs to the {screen.role.toLowerCase()}.
+                    </span>
                   )}
-                  <span className="ml-auto text-[11.5px] text-ink-400">
-                    {screen.email} · {demoPassword(screen.email)}
-                  </span>
                 </div>
               </article>
             );
@@ -348,7 +324,7 @@ export function Hub() {
           <Link to={`/book/${slug}`} className="font-semibold text-ember-600 hover:underline">
             Book a table
           </Link>
-          <span className="ml-auto">Every job has its own password — <span className="font-semibold text-ink-600">{DEMO_MASTER}</span> opens any of them</span>
+          <span className="ml-auto">No demo password ships in this build — every screen opens for an account its own person created.</span>
         </div>
       </footer>
     </div>

@@ -51,7 +51,7 @@ describe('signing in', () => {
   it('refuses anything else, with the same wording either way', async () => {
     const { user } = await demoFloor('WAITER', 'Sneha Patil');
     await expect(login(String(user.email), 'guess')).rejects.toThrow(/do not match/i);
-    await expect(login('nobody@sizzle.test', TEST_PASSWORD)).rejects.toThrow(/do not match/i);
+    await expect(login('nobody@nowhere.test', TEST_PASSWORD)).rejects.toThrow(/do not match/i);
   });
 
   it('will not resurrect a suspended account through the master', async () => {
