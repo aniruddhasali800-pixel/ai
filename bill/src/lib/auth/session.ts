@@ -16,6 +16,9 @@ export interface SessionUser {
   role: StaffRole;
 }
 
+const STAFF_ROLES: readonly StaffRole[] = ['BILL_ADMIN', 'OWNER', 'MANAGER', 'CASHIER'];
+const isStaffRole = (value: string): value is StaffRole => STAFF_ROLES.includes(value as StaffRole);
+
 /**
  * BILL_ADMIN is a separately provisioned operator for this payment service only. It has
  * the same Bill-service capabilities as OWNER, but it is not a Sizzle role and cannot be
@@ -24,7 +27,8 @@ export interface SessionUser {
 export function roleCan(role: StaffRole, action: StaffAction): boolean {
   if (role === 'OWNER' || role === 'BILL_ADMIN') return true;
   if (role === 'CASHIER') return action === 'view' || action === 'verify';
-  return action === 'view';
+  if (role === 'MANAGER') return action === 'view';
+  return false;
 }
 
 function secret(): string {
@@ -46,7 +50,14 @@ function readPayload(token: string): SessionUser | null {
   if (!safeEqual(hmacHex(secret(), payload), signature)) return null;
   try {
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as SessionUser & { exp: number };
-    if (parsed.exp < Math.floor(Date.now() / 1000)) return null;
+    if (
+      !isStaffRole(parsed.role) ||
+      typeof parsed.id !== 'string' ||
+      typeof parsed.email !== 'string' ||
+      typeof parsed.name !== 'string' ||
+      typeof parsed.exp !== 'number' ||
+      parsed.exp < Math.floor(Date.now() / 1000)
+    ) return null;
     return { id: parsed.id, email: parsed.email, name: parsed.name, role: parsed.role };
   } catch {
     return null;
@@ -65,9 +76,8 @@ export async function currentStaff(): Promise<SessionUser | null> {
   if (!claim) return null;
 
   const user = await db.user.findUnique({ where: { id: claim.id }, select: { id: true, email: true, name: true, role: true } });
-  if (!user) return null;
-  if (user.role !== claim.role) return null;
-  return { ...user, role: user.role as StaffRole };
+  if (!user || !isStaffRole(user.role) || user.role !== claim.role) return null;
+  return { ...user, role: user.role };
 }
 
 export async function requireStaff(): Promise<SessionUser> {

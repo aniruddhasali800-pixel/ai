@@ -41,6 +41,7 @@ test('Bill administrator can manage only the Bill service permission surface', (
   assert.equal(roleCan('BILL_ADMIN', 'view'), true);
   assert.equal(roleCan('BILL_ADMIN', 'verify'), true);
   assert.equal(roleCan('BILL_ADMIN', 'settings'), true);
+  assert.equal(roleCan('INVALID_ROLE' as never, 'view'), false);
 
   // The Sizzle-to-Bill signed relay has its own fixed actor allowlist. A relayed payload
   // cannot manufacture a Bill administrator identity from a restaurant role.
