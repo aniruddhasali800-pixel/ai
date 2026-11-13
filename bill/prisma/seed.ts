@@ -13,7 +13,7 @@ import { savePayee, getRawSettings, payeeHealth } from '../src/lib/settings';
  * reseeding must not silently reset a login somebody is using.
  */
 async function upsertUser(
-  role: 'OWNER' | 'MANAGER' | 'CASHIER',
+  role: 'BILL_ADMIN' | 'OWNER' | 'MANAGER' | 'CASHIER',
   name: string,
   email: string | undefined,
   password: string | undefined,
@@ -26,6 +26,11 @@ async function upsertUser(
   }
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
+    // A typo or reused email must never silently promote/demote an operator account.
+    // The legacy ADMIN role is the sole intentional migration to OWNER below.
+    if (existing.role !== role && !(role === 'OWNER' && existing.role === 'ADMIN')) {
+      throw new Error(`Refusing to change ${email} from ${existing.role} to ${role}; use a distinct email for each seeded role.`);
+    }
     await db.user.update({ where: { id: existing.id }, data: { role, name } });
     return existing.id;
   }
@@ -47,7 +52,13 @@ async function main() {
     process.env.SEED_CASHIER_EMAIL,
     process.env.SEED_CASHIER_PASSWORD,
   );
-  const logins = [ownerId, managerId, cashierId].filter(Boolean).length;
+  const billAdminId = await upsertUser(
+    'BILL_ADMIN',
+    'Bill Administrator',
+    process.env.SEED_BILL_ADMIN_EMAIL,
+    process.env.SEED_BILL_ADMIN_PASSWORD,
+  );
+  const logins = [ownerId, managerId, cashierId, billAdminId].filter(Boolean).length;
 
   // The earlier build called the top role ADMIN; this service speaks OWNER.
   const demoted = await db.user.updateMany({ where: { role: 'ADMIN' }, data: { role: 'OWNER' } });
@@ -56,7 +67,11 @@ async function main() {
   const settings = await getRawSettings();
   const vpa = process.env.SEED_PAYEE_VPA;
   // The payee is filed under an account, so a seed that created none looks for one before it writes.
-  const actorId = ownerId ?? (await db.user.findFirst({ where: { role: 'OWNER' }, select: { id: true } }))?.id ?? null;
+  const actorId =
+    ownerId ??
+    billAdminId ??
+    (await db.user.findFirst({ where: { role: 'OWNER' }, select: { id: true } }))?.id ??
+    null;
 
   if (settings && (await payeeHealth()) === 'unreadable') {
     // The stored payee was sealed with a key this build cannot derive. Every intent froze the

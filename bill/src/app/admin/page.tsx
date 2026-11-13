@@ -53,7 +53,7 @@ function Row({ intent, canVerify }: { intent: IntentView; canVerify: boolean }) 
           <span className="pill pill-claim">Read only for your role</span>
           <span className="mt-2 block text-[var(--muted)]">
             You can see the claim and everything about it. Confirming it needs the statement, so it belongs to the
-            counter or the owner.
+            cashier, owner or Bill administrator.
           </span>
         </p>
       )}

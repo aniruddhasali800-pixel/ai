@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { hmacHex, safeEqual } from '../crypto';
 import { db } from '../db';
 
-export type StaffRole = 'OWNER' | 'MANAGER' | 'CASHIER';
+export type StaffRole = 'BILL_ADMIN' | 'OWNER' | 'MANAGER' | 'CASHIER';
 export type StaffAction = 'view' | 'verify' | 'settings';
 
 const COOKIE = 'pay_session';
@@ -16,9 +16,13 @@ export interface SessionUser {
   role: StaffRole;
 }
 
-/** The role rule for the whole service: a manager reads, never settles; the payee belongs to the owner. */
+/**
+ * BILL_ADMIN is a separately provisioned operator for this payment service only. It has
+ * the same Bill-service capabilities as OWNER, but it is not a Sizzle role and cannot be
+ * asserted through the signed Sizzle relay. Managers remain read-only; cashiers verify only.
+ */
 export function roleCan(role: StaffRole, action: StaffAction): boolean {
-  if (role === 'OWNER') return true;
+  if (role === 'OWNER' || role === 'BILL_ADMIN') return true;
   if (role === 'CASHIER') return action === 'view' || action === 'verify';
   return action === 'view';
 }

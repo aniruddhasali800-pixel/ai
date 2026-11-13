@@ -28,11 +28,22 @@ payment request here by itself; without them Sizzle keeps its own UPI flow and n
 | Owner | `SEED_OWNER_EMAIL` | `SEED_OWNER_PASSWORD` |
 | Manager | `SEED_MANAGER_EMAIL` | `SEED_MANAGER_PASSWORD` |
 | Cashier | `SEED_CASHIER_EMAIL` | `SEED_CASHIER_PASSWORD` |
+| Bill administrator | `SEED_BILL_ADMIN_EMAIL` | `SEED_BILL_ADMIN_PASSWORD` |
 
 No password is published for this service. `npm run setup:env` writes a generated one per role into
 the gitignored `.env`, `npm run db:seed` puts those accounts in with those passwords, and a role whose
-variable is left unset is skipped rather than created on a guess. Only an **owner** can edit Payment
-Settings; a manager reads the queue, a cashier verifies payments.
+variable is left unset is skipped rather than created on a guess. The **owner** and the separately provisioned
+**Bill administrator** can edit Payment Settings; a manager reads the queue, and a cashier verifies payments.
+
+`BILL_ADMIN` is scoped to this Bill service: it can read the payment queue and income, verify or reject a
+payment claim, and change the merchant payee. It does not grant Sizzle restaurant-owner access or access to
+other Sizzle endpoints. It is provisioned only from `SEED_BILL_ADMIN_EMAIL` and `SEED_BILL_ADMIN_PASSWORD`
+in the service environment; there is no public registration or role-escalation screen. `npm run setup:env`
+generates a unique local Bill administrator password in the gitignored `.env`. For production, set the two
+variables in the host's secret environment and keep the credentials restricted to the payment operator.
+
+The Sizzle-to-Bill integration intentionally accepts only its own relayed `OWNER`, `MANAGER`, and `CASHIER`
+roles. A caller cannot send `BILL_ADMIN` in a signed request to impersonate this service's local administrator.
 
 The live smoke of the whole money path, `npm run test:e2e`, signs into *Sizzle's* floor rather than
 this service's, so it wants `SIZZLE_SMOKE_OWNER`, `SIZZLE_SMOKE_CASHIER` and `SIZZLE_SMOKE_MANAGER` as

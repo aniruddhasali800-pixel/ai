@@ -5,8 +5,7 @@ import { roleCan } from '../src/lib/auth/session';
 import { ApiError } from '../src/lib/api/handle';
 
 /**
- * The rule the whole integration rests on: the manager sees the queue and the income, and acts
- * on neither; the payee belongs to the owner alone.
+ * Managers read only, cashiers verify, and owner/Bill administrator accounts control the payment destination.
  */
 test('a manager may read, and nothing else', () => {
   assert.equal(roleCan('MANAGER', 'view'), true);
@@ -25,15 +24,30 @@ test('a manager cannot settle even when the caller claims they may', () => {
   });
 });
 
-test('only the owner moves the payee', () => {
+test('only the owner or Bill administrator moves the payee', () => {
   assert.equal(roleCan('CASHIER', 'settings'), false);
+  assert.equal(roleCan('MANAGER', 'settings'), false);
   assert.equal(roleCan('OWNER', 'settings'), true);
+  assert.equal(roleCan('BILL_ADMIN', 'settings'), true);
   assert.throws(() => assertAllowed({ role: 'CASHIER', name: 'Cashier', id: null }, 'settings'), /payee/i);
 });
 
 test('a cashier may settle but may not change the payee', () => {
   assert.equal(roleCan('CASHIER', 'verify'), true);
   assert.equal(roleCan('CASHIER', 'settings'), false);
+});
+
+test('Bill administrator can manage only the Bill service permission surface', () => {
+  assert.equal(roleCan('BILL_ADMIN', 'view'), true);
+  assert.equal(roleCan('BILL_ADMIN', 'verify'), true);
+  assert.equal(roleCan('BILL_ADMIN', 'settings'), true);
+
+  // The Sizzle-to-Bill signed relay has its own fixed actor allowlist. A relayed payload
+  // cannot manufacture a Bill administrator identity from a restaurant role.
+  assert.throws(
+    () => actorFromBody({ actor: { role: 'BILL_ADMIN', name: 'Forged relay' } }),
+    /staff role/i,
+  );
 });
 
 test('a request that names no role is refused rather than assumed', () => {

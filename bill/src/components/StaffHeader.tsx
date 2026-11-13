@@ -24,7 +24,7 @@ export async function StaffHeader() {
       </div>
       <div className="flex items-center gap-3">
         <span className="text-sm text-[var(--muted)]">
-          {staff.name} · {staff.role}
+          {staff.name} · {staff.role === 'BILL_ADMIN' ? 'Bill administrator' : staff.role}
         </span>
         <form action={signOut}>
           <button type="submit" className="btn btn-ghost text-sm">
